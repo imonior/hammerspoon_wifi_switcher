@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        :root { 
+            --bg-base: #111111; 
+            --bg-panel: #1a1a1a; 
+            --border-color: #333333; 
+            --text-main: #e0e0e0; 
+            --text-accent: #4CAF50; 
+            --btn-danger: #c62828; 
+            --radius-md: 10px; 
+            --radius-sm: 6px; 
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            padding: 15px; 
+            background: var(--bg-base); 
+            color: var(--text-main); 
+            font-size: 10px; 
+            margin: 0; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            box-sizing: border-box; 
+        }
+        h3 { 
+            font-size: 12px; 
+            color: var(--text-accent); 
+            margin: 0 0 10px 0; 
+            padding-bottom: 6px; 
+            border-bottom: 1px solid var(--border-color); 
+        }
+        pre { 
+            white-space: pre-wrap; 
+            word-break: break-all; 
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; 
+            font-size: 10px; 
+            background: var(--bg-panel); 
+            color: #dcdcaa; 
+            border-radius: var(--radius-sm); 
+            padding: 10px; 
+            margin: 0; 
+            flex: 1; 
+            overflow: auto; 
+            border: 1px solid var(--border-color); 
+            line-height: 1.4; 
+        }
+        .btns { 
+            margin-top: 15px; 
+            display: flex; 
+            gap: 12px; 
+            justify-content: center; 
+        }
+        button { 
+            padding: 8px 18px; 
+            font-size: 11px; 
+            border-radius: var(--radius-sm); 
+            border: none; 
+            cursor: pointer; 
+            font-weight: 500; 
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        .close { background: #3e3e42; color: #d4d4d4; } 
+        .clear { background: var(--btn-danger); color: #fff; } 
+        .refresh { background: #1976D2; color: #fff; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <h3 id="title">%POPUP_TITLE%</h3>
+    <pre id="content">%POPUP_CONTENT%</pre>
+    <div style="margin-top: 8px; font-size: 10px; color: #888; text-align: right;">时间: %POPUP_TIME%</div>
+    <div class="btns" id="btnGroup"></div>
+
+    <script>
+        const i18n = {
+            zh: {
+                clear_log: "清空日志",
+                refresh: "刷新",
+                close: "关闭",
+                time: "时间"
+            },
+            en: {
+                clear_log: "Clear Log",
+                refresh: "Refresh",
+                close: "Close",
+                time: "Time"
+            }
+        };
+        
+        const locale = "%LOCALE_PLACEHOLDER%";
+        
+        function t(key) {
+            return i18n[locale][key] || key;
+        }
+        
+        const type = "%POPUP_MODE%";
+        const btnGroup = document.getElementById('btnGroup');
+        const pre = document.getElementById('content');
+        const timeLabel = document.querySelector('div[style*="margin-top: 8px"]');
+        
+        if (timeLabel) {
+            const timeText = timeLabel.textContent;
+            timeLabel.textContent = t('time') + timeText.substring(2);
+        }
+        
+        if (pre) pre.scrollTop = pre.scrollHeight;
+
+        if (type === 'log') {
+            btnGroup.innerHTML = `
+                <button class="clear" onclick="window.location.href='hammerspoon://clear_log'">${t('clear_log')}</button>
+                <button class="refresh" onclick="window.location.href='hammerspoon://refresh_log'">${t('refresh')}</button>
+                <button class="close" onclick="window.location.href='hammerspoon://close_popup_view'">${t('close')}</button>
+            `;
+        } else {
+            btnGroup.innerHTML = `<button class="close" onclick="window.location.href='hammerspoon://close_popup_view'">${t('close')}</button>`;
+        }
+    </script>
+</body>
+</html>

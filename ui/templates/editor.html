@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>WiFi Static IP Smart Switcher</title>
+    <style>
+        :root {
+            --bg-main: #121212;
+            --bg-panel: #1e1e1e;
+            --bg-input: #2d2d2d;
+            --border-color: #383838;
+            --text-main: #e0e0e0;
+            --text-label: #aaaaaa;
+            --text-accent: #64B5F6;
+            --btn-primary: #1976D2;
+            --btn-danger: #D32F2F;
+            --btn-warning: #E65100;
+            --radius-md: 8px;
+            --radius-sm: 4px;
+        }
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 12px;
+            font-size: 13px;
+            user-select: none;
+            overflow: hidden;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 12px;
+            height: calc(580px - 24px);
+        }
+        .sidebar, .main-panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .panel-header {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: bold;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .panel-content {
+            padding: 12px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .list-header {
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.05);
+            font-size: 10px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .list-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .list-item:hover { background: #2a2a2a; }
+        .list-item.active { background: #1565C0; color: #fff; }
+        .list-item.unconfigured { opacity: 0.6; }
+        
+        .status-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(100, 181, 246, 0.2);
+            margin-bottom: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 11px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            color: #e0e0e0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+        
+        .target-info {
+            background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .target-name {
+            color: #fff;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .target-hint {
+            color: rgba(255,255,255,0.7);
+            font-size: 10px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            color: var(--text-accent);
+            margin: 10px 0 6px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px dashed #333;
+            font-weight: bold;
+        }
+
+        .form-group { margin-bottom: 8px; display: grid; grid-template-columns: 90px 1fr; gap: 8px; align-items: center; }
+        label { color: var(--text-label); font-size: 12px; text-align: right; }
+        input, select {
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-main);
+            padding: 4px 6px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        input:focus, select:focus { border-color: var(--btn-primary); outline: none; }
+        .btn-group {
+            padding: 10px 12px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        button {
+            background: var(--btn-primary);
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 12px;
+        }
+        button:hover { opacity: 0.9; }
+        button.danger { background: var(--btn-danger); }
+        button.warning { background: var(--btn-warning); }
+        button.secondary { background: #4a4a4a; color: #ccc; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="sidebar">
+        <div class="panel-header" id="header-networks">🌐 Wi-Fi 网络源</div>
+        <div class="panel-content" style="padding:0;" id="networks-list"></div>
+    </div>
+
+    <div class="main-panel">
+        <div class="panel-header">
+            <span id="header-panel">⚙️ 策略属性配置面板</span>
+        </div>
+        
+        <div class="panel-content">
+            <div class="status-card" id="current-hardware-info">加载硬件真实状态中...</div>
+
+            <div class="target-info" id="target-info" style="display:none;">
+                <span class="target-name" id="target-name"></span>
+                <span class="target-hint" id="target-hint"></span>
+            </div>
+
+            <div class="section-title" id="section-ipv4">一、IPv4 协议配置</div>
+            <div class="form-group">
+                <label id="label-mode">配置类型</label>
+                <select id="mode" onchange="toggleFields()">
+                    <option value="dhcp">DHCP (动态获取)</option>
+                    <option value="manual">Manual (静态绑定)</option>
+                </select>
+            </div>
+            <div id="v4-manual-inputs">
+                <div class="form-group"><label id="label-ip">IP Address</label><input type="text" id="ip"></div>
+                <div class="form-group"><label id="label-netmask">Subnet Mask</label><input type="text" id="netmask" value="255.255.255.0"></div>
+                <div class="form-group"><label id="label-gateway">Router</label><input type="text" id="gateway"></div>
+            </div>
+
+            <div class="section-title" id="section-ipv6">二、IPv6 协议配置</div>
+            <div class="form-group">
+                <label id="label-v6mode">配置类型</label>
+                <select id="v6mode" onchange="toggleFields()">
+                    <option value="automatic">Automatic (自动配置)</option>
+                    <option value="manual">Manual (手动指定)</option>
+                    <option value="off">Off (彻底禁用)</option>
+                </select>
+            </div>
+            <div id="v6-manual-inputs">
+                <div class="form-group"><label id="label-ipv6">IP Address</label><input type="text" id="ipv6"></div>
+                <div class="form-group"><label id="label-v6prefix">Prefix Length</label><input type="text" id="v6prefix" value="64"></div>
+                <div class="form-group"><label id="label-v6gateway">Router</label><input type="text" id="v6gateway"></div>
+            </div>
+
+            <div class="section-title" id="section-dns">三、DNS 服务配置</div>
+            <div class="form-group">
+                <label id="label-dns">DNS Servers</label>
+                <input type="text" id="dns" placeholder="多值请用逗号分隔，留空则自动获取">
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="warning" id="btn-force" onclick="forceApplyNetwork()">⚡ 强制覆写当前网卡</button>
+            <button class="danger" id="btn-delete" onclick="deleteConfig()">删除配置</button>
+            <button id="btn-save" onclick="saveConfig()">保存</button>
+            <button class="secondary" id="btn-close" onclick="closeWindow()">关闭</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const i18n = {
+        zh: {
+            app_name: "无线网络静态IP智能切换管理器",
+            wifi_networks: "Wi-Fi 网络源",
+            config_panel: "策略属性配置面板",
+            loading_status: "加载硬件真实状态中...",
+            global_fallback: "★ 全局后备兜底策略",
+            global_hint: "所有未配置网络的默认行为",
+            configured: "已配置策略",
+            configured_networks: "📋 已配置网络",
+            unconfigured_networks: "📶 未配置网络",
+            ipv4_config: "一、IPv4 协议配置",
+            ipv6_config: "二、IPv6 协议配置",
+            dns_config: "三、DNS 服务配置",
+            config_type: "配置类型",
+            dhcp: "DHCP (动态获取)",
+            manual: "Manual (静态绑定)",
+            ip_address: "IP Address",
+            subnet_mask: "Subnet Mask",
+            router: "Router",
+            automatic: "Automatic (自动配置)",
+            manual_v6: "Manual (手动指定)",
+            off: "Off (彻底禁用)",
+            prefix_length: "Prefix Length",
+            dns_servers: "DNS Servers",
+            dns_placeholder: "多值请用逗号分隔，留空则自动获取",
+            force_apply: "⚡ 强制覆写当前网卡",
+            delete: "删除配置",
+            save: "保存",
+            close: "关闭",
+            current_connection: "当前连接",
+            not_connected: "未连接",
+            not_assigned: "未分配",
+            system_auto: "系统自动获取",
+            confirm_delete: "确定删除",
+            confirm_delete_hint: "的专有网络绑定配置吗？",
+            select_network_first: "请先选择一个网络"
+        },
+        en: {
+            app_name: "WiFi Static IP Smart Switcher",
+            wifi_networks: "Wi-Fi Networks",
+            config_panel: "Policy Configuration Panel",
+            loading_status: "Loading hardware status...",
+            global_fallback: "★ Global Fallback Policy",
+            global_hint: "Default behavior for all unconfigured networks",
+            configured: "Configured Policy",
+            configured_networks: "📋 Configured Networks",
+            unconfigured_networks: "📶 Unconfigured Networks",
+            ipv4_config: "1. IPv4 Configuration",
+            ipv6_config: "2. IPv6 Configuration",
+            dns_config: "3. DNS Configuration",
+            config_type: "Configuration Type",
+            dhcp: "DHCP (Automatic)",
+            manual: "Manual (Static)",
+            ip_address: "IP Address",
+            subnet_mask: "Subnet Mask",
+            router: "Router",
+            automatic: "Automatic",
+            manual_v6: "Manual",
+            off: "Off",
+            prefix_length: "Prefix Length",
+            dns_servers: "DNS Servers",
+            dns_placeholder: "Multiple values separated by comma, leave empty for auto",
+            force_apply: "⚡ Force Apply to Current NIC",
+            delete: "Delete Config",
+            save: "Save",
+            close: "Close",
+            current_connection: "Current Connection",
+            not_connected: "Not Connected",
+            not_assigned: "Not Assigned",
+            system_auto: "System Auto",
+            confirm_delete: "Confirm Delete",
+            confirm_delete_hint: "'s network configuration?",
+            select_network_first: "Please select a network first"
+        }
+    };
+    
+    let locale = '%LOCALE_PLACEHOLDER%';
+    
+    function t(key) {
+        return i18n[locale][key] || key;
+    }
+    
+    function setLocale(lang) {
+        locale = lang === 'en' ? 'en' : 'zh';
+    }
+    
+    function applyI18n() {
+        document.getElementById('header-networks').textContent = t('wifi_networks');
+        document.getElementById('header-panel').textContent = t('config_panel');
+        document.getElementById('current-hardware-info').textContent = t('loading_status');
+        document.getElementById('section-ipv4').textContent = t('ipv4_config');
+        document.getElementById('section-ipv6').textContent = t('ipv6_config');
+        document.getElementById('section-dns').textContent = t('dns_config');
+        
+        document.getElementById('label-mode').textContent = t('config_type');
+        document.getElementById('label-v6mode').textContent = t('config_type');
+        document.getElementById('label-ip').textContent = t('ip_address');
+        document.getElementById('label-netmask').textContent = t('subnet_mask');
+        document.getElementById('label-gateway').textContent = t('router');
+        document.getElementById('label-ipv6').textContent = t('ip_address');
+        document.getElementById('label-v6prefix').textContent = t('prefix_length');
+        document.getElementById('label-v6gateway').textContent = t('router');
+        document.getElementById('label-dns').textContent = t('dns_servers');
+        document.getElementById('dns').placeholder = t('dns_placeholder');
+        
+        document.getElementById('btn-force').textContent = t('force_apply');
+        document.getElementById('btn-delete').textContent = t('delete');
+        document.getElementById('btn-save').textContent = t('save');
+        document.getElementById('btn-close').textContent = t('close');
+        
+        const dhcpOpt = document.querySelector('#mode option[value="dhcp"]');
+        const manualOpt = document.querySelector('#mode option[value="manual"]');
+        if (dhcpOpt) dhcpOpt.textContent = t('dhcp');
+        if (manualOpt) manualOpt.textContent = t('manual');
+        
+        const autoOpt = document.querySelector('#v6mode option[value="automatic"]');
+        const manualV6Opt = document.querySelector('#v6mode option[value="manual"]');
+        const offOpt = document.querySelector('#v6mode option[value="off"]');
+        if (autoOpt) autoOpt.textContent = t('automatic');
+        if (manualV6Opt) manualV6Opt.textContent = t('manual_v6');
+        if (offOpt) offOpt.textContent = t('off');
+        
+        refreshConfig(JSON.stringify(preferredNetworks), JSON.stringify(savedConfigs));
+    }
+    
+    function callLua(action, data = null) {
+        if (data) {
+            window.location.href = 'hammerspoon://' + action + '?data=' + encodeURIComponent(JSON.stringify(data));
+        } else {
+            window.location.href = 'hammerspoon://' + action;
+        }
+    }
+    
+    function closeWindow() {
+        callLua('close_editor');
+    }
+    
+    function forceApplyNetwork() {
+        if (!currentSelectedSSID) {
+            alert(t('select_network_first'));
+            return;
+        }
+        
+        const currentMode = document.getElementById("mode").value;
+        const currentIp = document.getElementById("ip").value;
+        const currentNetmask = document.getElementById("netmask").value;
+        const currentGateway = document.getElementById("gateway").value;
+        const currentDns = document.getElementById("dns").value;
+        const currentV6mode = document.getElementById("v6mode").value;
+        
+        const configData = {
+            ssid: currentSelectedSSID,
+            mode: currentMode,
+            ip: currentIp,
+            netmask: currentNetmask,
+            gateway: currentGateway,
+            dns: currentDns,
+            v6mode: currentV6mode
+        };
+        
+        if (currentV6mode === 'manual') {
+            configData.ipv6 = document.getElementById("ipv6").value;
+            configData.v6prefix = document.getElementById("v6prefix").value;
+            configData.v6gateway = document.getElementById("v6gateway").value;
+        }
+        
+        callLua('force_apply_network_with_confirm', configData);
+    }
+
+    let preferredNetworks = %NETWORKS_PLACEHOLDER%;
+    let savedConfigs = %CONFIG_PLACEHOLDER%;
+    let currentSelectedSSID = null;
+
+    function refreshConfig(newNetworks, newConfigs) {
+        console.log("refreshConfig - 刷新配置");
+        preferredNetworks = JSON.parse(newNetworks);
+        savedConfigs = JSON.parse(newConfigs);
+        
+        console.log("refreshConfig - 配置SSID列表:", Object.keys(savedConfigs));
+        
+        const previouslySelected = currentSelectedSSID;
+        
+        init();
+        
+        setTimeout(() => {
+            const items = document.querySelectorAll(".list-item");
+            console.log("refreshConfig - 列表项数量:", items.length);
+            
+            if (previouslySelected && savedConfigs.hasOwnProperty(previouslySelected)) {
+                items.forEach(item => {
+                    if (item.textContent.includes(previouslySelected) || 
+                        (previouslySelected === "__DEFAULT__" && item.textContent.includes("全局"))) {
+                        item.click();
+                    }
+                });
+            } else if (items.length > 0) {
+                items[0].click();
+            }
+        }, 100);
+        
+        callLua('get_current_network_info');
+    }
+
+    function init() {
+        const listContainer = document.getElementById("networks-list");
+        listContainer.innerHTML = "";
+        
+        const currentSSID = window.currentConnectedSSID;
+        const defaultItem = "__DEFAULT__";
+        
+        const configuredNetworks = [];
+        const unconfiguredNetworks = [];
+        
+        const configSsidSet = new Set(Object.keys(savedConfigs));
+        
+        preferredNetworks.forEach(ssid => {
+            if (configSsidSet.has(ssid)) {
+                if (ssid === currentSSID && ssid !== defaultItem) {
+                    configuredNetworks.unshift(ssid);
+                } else if (ssid !== defaultItem) {
+                    configuredNetworks.push(ssid);
+                }
+            } else {
+                if (ssid !== defaultItem) {
+                    unconfiguredNetworks.push(ssid);
+                }
+            }
+        });
+        
+        if (configSsidSet.has(defaultItem)) {
+            configuredNetworks.push(defaultItem);
+        }
+        
+        configuredNetworks.sort((a, b) => {
+            if (a === currentSSID) return -1;
+            if (b === currentSSID) return 1;
+            if (a === defaultItem) return -1;
+            if (b === defaultItem) return 1;
+            return a.localeCompare(b);
+        });
+        
+        unconfiguredNetworks.sort((a, b) => a.localeCompare(b));
+
+        if (configuredNetworks.length > 0) {
+            const configuredHeader = document.createElement("div");
+            configuredHeader.className = "list-header";
+            configuredHeader.textContent = t('configured_networks');
+            listContainer.appendChild(configuredHeader);
+            
+            configuredNetworks.forEach(ssid => {
+                const item = document.createElement("div");
+                item.className = "list-item";
+                const displayName = ssid === "__DEFAULT__" ? t('global_fallback') : ssid;
+                item.innerHTML = `<span>${displayName}</span>` + `<span style="color:#4CAF50;">●</span>`;
+                item.onclick = () => selectSSID(ssid, item);
+                listContainer.appendChild(item);
+            });
+        }
+
+        if (unconfiguredNetworks.length > 0) {
+            const unconfiguredHeader = document.createElement("div");
+            unconfiguredHeader.className = "list-header";
+            unconfiguredHeader.textContent = t('unconfigured_networks');
+            listContainer.appendChild(unconfiguredHeader);
+            
+            unconfiguredNetworks.forEach(ssid => {
+                const item = document.createElement("div");
+                item.className = "list-item unconfigured";
+                const displayName = ssid;
+                item.innerHTML = `<span>${displayName}</span>`;
+                item.onclick = () => selectSSID(ssid, item);
+                listContainer.appendChild(item);
+            });
+        }
+
+        let defaultIndex = -1;
+        const allNetworks = [...configuredNetworks, ...unconfiguredNetworks];
+        
+        const headerOffset = (configuredNetworks.length > 0 ? 1 : 0);
+        
+        if (currentSSID && allNetworks.includes(currentSSID)) {
+            const idxInAll = allNetworks.indexOf(currentSSID);
+            const idxInGroup = configuredNetworks.includes(currentSSID) 
+                ? configuredNetworks.indexOf(currentSSID)
+                : unconfiguredNetworks.indexOf(currentSSID);
+            defaultIndex = headerOffset + idxInGroup;
+        }
+        
+        if(listContainer.children.length > 0 && listContainer.children[defaultIndex]) {
+            listContainer.children[defaultIndex].click();
+        } else if (listContainer.children.length > 0) {
+            const firstItem = listContainer.querySelector(".list-item");
+            if (firstItem) {
+                firstItem.click();
+            } else {
+                listContainer.children[0].click();
+            }
+        }
+    }
+
+    function selectSSID(ssid, element) {
+        currentSelectedSSID = ssid;
+        document.querySelectorAll(".list-item").forEach(el => el.classList.remove("active"));
+        element.classList.add("active");
+        
+        const targetInfo = document.getElementById("target-info");
+        const targetName = document.getElementById("target-name");
+        const targetHint = document.getElementById("target-hint");
+        const btnForce = document.getElementById("btn-force");
+        
+        if (ssid === "__DEFAULT__") {
+            targetName.textContent = t('global_fallback');
+            targetHint.textContent = t('global_hint');
+            document.getElementById("btn-delete").style.display = "none";
+            btnForce.style.display = "none";
+        } else {
+            targetName.textContent = ssid;
+            targetHint.textContent = t('configured');
+            document.getElementById("btn-delete").style.display = "block";
+            
+            const currentSSID = window.currentConnectedSSID;
+            if (currentSSID && currentSSID === ssid) {
+                btnForce.style.display = "block";
+            } else {
+                btnForce.style.display = "none";
+            }
+        }
+        targetInfo.style.display = "flex";
+
+        const config = savedConfigs[ssid] || { mode: "dhcp", v6mode: "automatic", dns: "" };
+        
+        document.getElementById("mode").value = config.mode || "dhcp";
+        document.getElementById("ip").value = config.ip || "";
+        document.getElementById("netmask").value = config.netmask || "255.255.255.0";
+        document.getElementById("gateway").value = config.gateway || "";
+        
+        document.getElementById("v6mode").value = config.v6mode || "automatic";
+        document.getElementById("ipv6").value = config.ipv6 || "";
+        document.getElementById("v6prefix").value = config.v6prefix || "64";
+        document.getElementById("v6gateway").value = config.v6gateway || "";
+        
+        document.getElementById("dns").value = config.dns || "";
+
+        toggleFields();
+    }
+
+    function toggleFields() {
+        const isV4Manual = document.getElementById("mode").value === "manual";
+        document.getElementById("v4-manual-inputs").style.display = isV4Manual ? "block" : "none";
+
+        const isV6Manual = document.getElementById("v6mode").value === "manual";
+        document.getElementById("v6-manual-inputs").style.display = isV6Manual ? "block" : "none";
+    }
+
+    function saveConfig() {
+        const data = {
+            ssid: currentSelectedSSID,
+            mode: document.getElementById("mode").value,
+            ip: document.getElementById("ip").value,
+            netmask: document.getElementById("netmask").value,
+            gateway: document.getElementById("gateway").value,
+            v6mode: document.getElementById("v6mode").value,
+            ipv6: document.getElementById("ipv6").value,
+            v6prefix: document.getElementById("v6prefix").value,
+            v6gateway: document.getElementById("v6gateway").value,
+            dns: document.getElementById("dns").value
+        };
+        callLua('save_wifi_scene', data);
+    }
+
+    function deleteConfig() {
+        if(confirm(t('confirm_delete') + ' ' + currentSelectedSSID + t('confirm_delete_hint'))) {
+            callLua('delete_wifi_scene', {ssid: currentSelectedSSID});
+        }
+    }
+
+    function updateCurrentNetworkUI(ssid, ip, netmask, gateway, dns, v6mode, v6ip) {
+        const prevSSID = window.currentConnectedSSID;
+        window.currentConnectedSSID = ssid;
+        
+        const text = `📶 ${t('current_connection')}: ${ssid || t('not_connected')}
+━━━━━━━━ IPv4 ━━━━━━━━
+${t('ip_address')}: ${ip || t('not_assigned')}
+${t('subnet_mask')}: ${netmask || t('not_assigned')}
+${t('router')}: ${gateway || t('not_assigned')}
+
+━━━━━━━━ IPv6 ━━━━━━━━
+${t('config_type')}: ${v6mode || 'Off'}
+${t('ip_address')}: ${v6ip || t('not_assigned')}
+
+━━━━━━━━ DNS ━━━━━━━━
+${t('dns_servers')}: ${dns || t('system_auto')}`;
+        
+        console.log("updateCurrentNetworkUI - 设置网络信息:", text);
+        
+        if (prevSSID !== ssid) {
+            console.log("updateCurrentNetworkUI - SSID变化，调用init()");
+            init();
+            setTimeout(() => {
+                const infoElement = document.getElementById('current-hardware-info');
+                if (infoElement) {
+                    infoElement.textContent = text;
+                    console.log("updateCurrentNetworkUI - 延迟设置网络信息成功");
+                }
+            }, 200);
+        } else {
+            const infoElement = document.getElementById('current-hardware-info');
+            if (infoElement) {
+                infoElement.textContent = text;
+                console.log("updateCurrentNetworkUI - 网络信息设置成功");
+            } else {
+                console.log("updateCurrentNetworkUI - 找不到 current-hardware-info 元素");
+            }
+        }
+        
+        if (prevSSID === ssid) {
+            if (currentSelectedSSID && currentSelectedSSID !== '__DEFAULT__') {
+                const btnForce = document.getElementById("btn-force");
+                if (ssid && ssid === currentSelectedSSID) {
+                    btnForce.style.display = "block";
+                } else {
+                    btnForce.style.display = "none";
+                }
+            }
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        applyI18n();
+        
+        let retryCount = 0;
+        const maxRetries = 5;
+        const retryInterval = 1000;
+        
+        function fetchNetworkInfo() {
+            console.log("fetchNetworkInfo - 尝试获取网络信息，重试次数: " + retryCount);
+            callLua('get_current_network_info');
+            
+            retryCount++;
+            if (retryCount < maxRetries) {
+                setTimeout(fetchNetworkInfo, retryInterval);
+            }
+        }
+        
+        setTimeout(fetchNetworkInfo, 500);
+    });
+    
+    function setLocaleAndApply(lang) {
+        setLocale(lang);
+        applyI18n();
+    }
+</script>
+</body>
+</html>

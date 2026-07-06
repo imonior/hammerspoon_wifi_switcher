@@ -1,0 +1,15 @@
+# User data - never commit
+config.json
+config.json.backup
+switcher.log
+*.log
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Plan docs (internal)
+.trae/

@@ -1,0 +1,35 @@
+{
+  "__DEFAULT__": {
+    "netmask": "255.255.255.0",
+    "v6mode": "automatic",
+    "ipv6": "",
+    "v6gateway": "",
+    "dns": "",
+    "mode": "dhcp",
+    "v6prefix": "64",
+    "gateway": "",
+    "ip": ""
+  },
+  "YourHomeNetwork": {
+    "netmask": "255.255.255.0",
+    "v6mode": "off",
+    "ipv6": "",
+    "mode": "dhcp",
+    "v6gateway": "",
+    "dns": "127.0.0.1",
+    "gateway": "",
+    "v6prefix": "64",
+    "ip": ""
+  },
+  "YourOfficeNetwork_5G": {
+    "netmask": "255.255.255.0",
+    "v6mode": "off",
+    "ipv6": "",
+    "mode": "manual",
+    "v6gateway": "",
+    "dns": "192.168.1.1,8.8.8.8",
+    "gateway": "192.168.1.1",
+    "v6prefix": "64",
+    "ip": "192.168.1.100"
+  }
+}
