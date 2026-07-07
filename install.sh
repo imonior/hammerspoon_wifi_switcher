@@ -24,7 +24,7 @@ HAMMERSPOON_INIT="$HAMMERSPOON_DIR/init.lua"
 INSTALL_DIR="$HAMMERSPOON_DIR/wifi_ip_switcher"
 REQUIRE_LINE='require("wifi_ip_switcher.init")'
 
-HAMMERSPOON_DMG_URL="https://github.com/Hammerspoon/hammerspoon/releases/download/0.4.3/Hammerspoon-0.4.3.zip"
+HAMMERSPOON_DMG_URL="https://github.com/Hammerspoon/hammerspoon/releases/download/1.1.1/Hammerspoon-1.1.1.zip"
 
 # Colors
 RED='\033[0;31m'
@@ -94,9 +94,23 @@ ensure_hammerspoon() {
         brew install --cask hammerspoon
     else
         info "Homebrew not found. Downloading from official release..."
+
+        # Fetch latest release URL from GitHub API (fallback to hardcoded version)
+        local hammerspoon_url
+        hammerspoon_url=$(curl -fsSL "https://api.github.com/repos/Hammerspoon/hammerspoon/releases/latest" 2>/dev/null \
+            | grep '"browser_download_url"' \
+            | grep '\.zip"' \
+            | head -1 \
+            | sed 's/.*"browser_download_url": *"//;s/"$//')
+
+        if [ -z "$hammerspoon_url" ]; then
+            warn "Could not fetch latest release URL. Falling back to known version."
+            hammerspoon_url="$HAMMERSPOON_DMG_URL"
+        fi
+
         local tmp_zip="/tmp/hammerspoon.zip"
-        info "Downloading Hammerspoon..."
-        curl -fsSL -o "$tmp_zip" "$HAMMERSPOON_DMG_URL"
+        info "Downloading Hammerspoon from: $hammerspoon_url"
+        curl -fsSL -o "$tmp_zip" "$hammerspoon_url"
         info "Extracting..."
         unzip -o "$tmp_zip" -d /tmp/ > /dev/null 2>&1
         info "Installing to /Applications..."
@@ -178,7 +192,6 @@ install_files() {
 
     # Create directories
     mkdir -p "$INSTALL_DIR/ui/templates"
-    mkdir -p "$INSTALL_DIR/icons"
 
     # Copy code files (lua + ui)
     cp "$SRC_DIR"/*.lua "$INSTALL_DIR/"
