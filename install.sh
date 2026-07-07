@@ -185,11 +185,6 @@ install_files() {
     cp "$SRC_DIR/ui/"*.lua "$INSTALL_DIR/ui/"
     cp "$SRC_DIR/ui/templates/"* "$INSTALL_DIR/ui/templates/"
 
-    # Copy icons if present
-    if [ -d "$SRC_DIR/icons" ]; then
-        cp "$SRC_DIR/icons/"* "$INSTALL_DIR/icons/" 2>/dev/null || true
-    fi
-
     # Handle config.json
     if [ "$is_update" = "true" ]; then
         # Update: restore backup, don't touch config.json

@@ -182,8 +182,6 @@ hammerspoon-wifi-switcher/
 │   └── templates/            #   Pure frontend templates
 │       ├── editor.html       #     Configuration editor panel (full UI/interaction/CSS)
 │       └── popups.html       #     Multi-modal popup (reused for log viewer + success notifications)
-└── icons/
-    └── wifi_icon.png         # Menu bar icon
 ```
 
 ### Layer responsibilities
