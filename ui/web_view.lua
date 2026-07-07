@@ -15,6 +15,7 @@ M.popupView = nil
 M.logPopupView = nil
 
 local modulePath = debug.getinfo(1).source:match("@?(.*/)") or (os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/ui/")
+local basePath = modulePath:match("^(.*)ui/$") or modulePath:match("^(.*)/$") or modulePath
 
 local function loadTemplate(filename)
     local path = modulePath .. "templates/" .. filename
@@ -218,7 +219,7 @@ urlevent.bind("close_popup_view", function()
 end)
 
 urlevent.bind("clear_log", function()
-    local logFile = os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/switcher.log"
+    local logFile = basePath .. "switcher.log"
     local f = io.open(logFile, "w")
     if f then
         f:close()
@@ -238,7 +239,7 @@ urlevent.bind("clear_log", function()
 end)
 
 urlevent.bind("refresh_log", function()
-    local logFile = os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/switcher.log"
+    local logFile = basePath .. "switcher.log"
     local f = io.open(logFile, "r")
     local content = ""
     if f then

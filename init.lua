@@ -12,38 +12,21 @@ local ui = require("wifi_ip_switcher.ui.web_view")
 local i18n = require("wifi_ip_switcher.i18n")
 
 local M = {}
+local modulePath = debug.getinfo(1).source:match("@?(.*/)") or (os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/")
 local currentSSID = nil
 M.menuBarItem = nil
 M.wifiWatcher = nil
 
-local function showNetworkReport(ssid)
+local function buildNetworkReport(configSource)
     local status = core.getCurrentWiFiStatus()
-    local currentSSID = status.ssid or i18n.t("unknown")
-    
-    if currentSSID ~= ssid then
-        utils.log(i18n.t("log_ssid_changed", ssid, currentSSID))
-        ssid = currentSSID
-    end
-    
+    local ssid = status.ssid or i18n.t("unknown")
+    local rssi = status.rssi or i18n.t("unknown")
     local wifiInterface = core.getWiFiServiceName()
     local wifiDevice = core.getWiFiDevice()
     local ip, gw, nm = core.getCurrentIPv4Info(wifiInterface)
     local activeDns = core.getActiveDNS()
     local v6mode, v6ip = core.getCurrentIPv6Info(wifiInterface)
-    local rssi = status.rssi or i18n.t("unknown")
-    
-    local hasCustomConfig = config.current[ssid] ~= nil
-    local hasGlobalConfig = config.current["__DEFAULT__"] ~= nil
-    
-    local configSource
-    if hasCustomConfig then
-        configSource = i18n.t("config_source_custom")
-    elseif hasGlobalConfig then
-        configSource = i18n.t("config_source_global")
-    else
-        configSource = i18n.t("config_source_dhcp")
-    end
-    
+
     local report = i18n.t("label_ssid") .. ": " .. ssid .. "\n"
     if rssi and rssi ~= i18n.t("unknown") then
         report = report .. i18n.t("label_signal") .. ": " .. rssi .. "dBm\n"
@@ -62,7 +45,30 @@ local function showNetworkReport(ssid)
         i18n.t("label_system") .. "\n" ..
         i18n.t("label_interface") .. ": " .. wifiInterface .. "\n" ..
         i18n.t("label_device") .. ": " .. wifiDevice
-        
+    return report, ssid
+end
+
+local function showNetworkReport(ssid)
+    local currentSSID = core.getCurrentWiFiStatus().ssid or i18n.t("unknown")
+
+    if currentSSID ~= ssid then
+        utils.log(i18n.t("log_ssid_changed", ssid, currentSSID))
+        ssid = currentSSID
+    end
+
+    local hasCustomConfig = config.current[ssid] ~= nil
+    local hasGlobalConfig = config.current["__DEFAULT__"] ~= nil
+
+    local configSource
+    if hasCustomConfig then
+        configSource = i18n.t("config_source_custom")
+    elseif hasGlobalConfig then
+        configSource = i18n.t("config_source_global")
+    else
+        configSource = i18n.t("config_source_dhcp")
+    end
+
+    local report = buildNetworkReport(configSource)
     ui.showPopup("success", i18n.t("popup_title_config_success"), report)
     ui.syncHardwareStatusToUI()
 end
@@ -83,8 +89,7 @@ local function applyNetworkStrategy(ssid)
             
             core.configureIPv6(wifiInterface, setting.v6mode, setting.ipv6, setting.v6prefix, setting.v6gateway)
             
-            core.runWithSudo(string.format("/usr/sbin/networksetup -setmanual '%s' '%s' '%s' '%s'", 
-                wifiInterface, setting.ip, netmask, setting.gateway))
+            core.runWithSudo("/usr/sbin/networksetup -setmanual " .. core.shellQuote(wifiInterface) .. " " .. core.shellQuote(setting.ip) .. " " .. core.shellQuote(netmask) .. " " .. core.shellQuote(setting.gateway))
             
             utils.waitForCondition(function()
                 local currentIp, _, _ = core.getCurrentIPv4Info(wifiInterface)
@@ -107,7 +112,7 @@ local function applyNetworkStrategy(ssid)
                 end)
             end)
         else
-            core.runWithSudo(string.format("/usr/sbin/networksetup -setdhcp '%s'", wifiInterface))
+            core.runWithSudo("/usr/sbin/networksetup -setdhcp " .. core.shellQuote(wifiInterface))
             
             utils.waitForCondition(function()
                 local currentIp, _, _ = core.getCurrentIPv4Info(wifiInterface)
@@ -132,7 +137,7 @@ local function applyNetworkStrategy(ssid)
         end
     else
         utils.log(i18n.t("log_no_config_fallback"))
-        core.runWithSudo(string.format("/usr/sbin/networksetup -setdhcp '%s'", wifiInterface))
+        core.runWithSudo("/usr/sbin/networksetup -setdhcp " .. core.shellQuote(wifiInterface))
         
         utils.waitForCondition(function()
             local currentIp, _, _ = core.getCurrentIPv4Info(wifiInterface)
@@ -174,7 +179,7 @@ local function setCurrentNetworkToDHCP()
     local wifiDevice = core.getWiFiDevice()
     utils.log(i18n.t("log_manual_dhcp"))
     
-    core.runWithSudo(string.format("/usr/sbin/networksetup -setdhcp '%s'", wifiInterface))
+    core.runWithSudo("/usr/sbin/networksetup -setdhcp " .. core.shellQuote(wifiInterface))
     core.configureIPv6(wifiInterface, "automatic", "", "", "")
     
     utils.waitForCondition(function()
@@ -184,34 +189,9 @@ local function setCurrentNetworkToDHCP()
         if not ipObtained then utils.log(i18n.t("log_warn_no_dhcp")) end
         
         core.setDNSServers(wifiInterface, "")
-        
+
         utils.wait(1, function()
-            local status = core.getCurrentWiFiStatus()
-            local ssid = status.ssid or i18n.t("unknown")
-            local rssi = status.rssi or i18n.t("unknown")
-            local ip, gw, nm = core.getCurrentIPv4Info(wifiInterface)
-            local activeDns = core.getActiveDNS()
-            local v6mode, v6ip = core.getCurrentIPv6Info(wifiInterface)
-            
-            local report = i18n.t("label_ssid") .. ": " .. ssid .. "\n"
-            if rssi and rssi ~= i18n.t("unknown") then
-                report = report .. i18n.t("label_signal") .. ": " .. rssi .. "dBm\n"
-            end
-            report = report ..
-                i18n.t("label_config_source") .. ": " .. i18n.t("config_source_dhcp") .. "\n\n" ..
-                i18n.t("label_ipv4") .. "\n" ..
-                i18n.t("label_address") .. ": " .. ip .. "\n" ..
-                i18n.t("label_netmask") .. ": " .. nm .. "\n" ..
-                i18n.t("label_gateway") .. ": " .. gw .. "\n\n" ..
-                i18n.t("label_ipv6") .. "\n" ..
-                i18n.t("label_mode") .. ": " .. v6mode .. "\n" ..
-                i18n.t("label_address") .. ": " .. v6ip .. "\n\n" ..
-                i18n.t("label_dns") .. "\n" ..
-                activeDns .. "\n\n" ..
-                i18n.t("label_system") .. "\n" ..
-                i18n.t("label_interface") .. ": " .. wifiInterface .. "\n" ..
-                i18n.t("label_device") .. ": " .. wifiDevice
-            
+            local report = buildNetworkReport(i18n.t("config_source_dhcp"))
             ui.showPopup("success", i18n.t("popup_title_dhcp_success"), report)
             ui.syncHardwareStatusToUI()
         end)
@@ -232,7 +212,7 @@ local function buildMenuBar()
                 ui.showEditor(config.current)
             end },
             { title = i18n.t("menu_view_logs"), fn = function()
-                local f = io.open(os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/switcher.log", "r")
+                local f = io.open(modulePath .. "switcher.log", "r")
                 local logData = f and f:read("*a") or i18n.t("menu_no_log")
                 if f then f:close() end
                 ui.showPopup("log", i18n.t("log_recent_system_logs"), logData)
@@ -308,42 +288,13 @@ function M.init()
                     currentSSID = data.ssid
                     
                     local function finishAndShowReport()
-                        local status = core.getCurrentWiFiStatus()
-                        local ssid = status.ssid or i18n.t("unknown")
-                        local rssi = status.rssi or i18n.t("unknown")
-                        local wifiDevice = core.getWiFiDevice()
-                        local ip, gw, nm = core.getCurrentIPv4Info(wifiInterface)
-                        local activeDns = core.getActiveDNS()
-                        local v6mode, v6ip = core.getCurrentIPv6Info(wifiInterface)
-                        
-                        local configSource = i18n.t("config_source_editor")
-                        
-                        local report = i18n.t("label_ssid") .. ": " .. ssid .. "\n"
-                        if rssi and rssi ~= i18n.t("unknown") then
-                            report = report .. i18n.t("label_signal") .. ": " .. rssi .. "dBm\n"
-                        end
-                        report = report ..
-                            i18n.t("label_config_source") .. ": " .. configSource .. "\n\n" ..
-                            i18n.t("label_ipv4") .. "\n" ..
-                            i18n.t("label_address") .. ": " .. ip .. "\n" ..
-                            i18n.t("label_netmask") .. ": " .. nm .. "\n" ..
-                            i18n.t("label_gateway") .. ": " .. gw .. "\n\n" ..
-                            i18n.t("label_ipv6") .. "\n" ..
-                            i18n.t("label_mode") .. ": " .. v6mode .. "\n" ..
-                            i18n.t("label_address") .. ": " .. v6ip .. "\n\n" ..
-                            i18n.t("label_dns") .. "\n" ..
-                            activeDns .. "\n\n" ..
-                            i18n.t("label_system") .. "\n" ..
-                            i18n.t("label_interface") .. ": " .. wifiInterface .. "\n" ..
-                            i18n.t("label_device") .. ": " .. wifiDevice
-                            
+                        local report = buildNetworkReport(i18n.t("config_source_editor"))
                         ui.showPopup("success", i18n.t("popup_title_force_apply_success"), report)
                         ui.syncHardwareStatusToUI()
                     end
                     
                     if data.mode == "manual" then
-                        core.runWithSudo(string.format("/usr/sbin/networksetup -setmanual '%s' '%s' '%s' '%s'", 
-                            wifiInterface, data.ip, data.netmask, data.gateway))
+                        core.runWithSudo("/usr/sbin/networksetup -setmanual " .. core.shellQuote(wifiInterface) .. " " .. core.shellQuote(data.ip) .. " " .. core.shellQuote(data.netmask) .. " " .. core.shellQuote(data.gateway))
                         core.configureIPv6(wifiInterface, data.v6mode, data.ipv6 or "", data.v6prefix or "", data.v6gateway or "")
                         
                         if targetDns and targetDns:match("%S") then
@@ -362,7 +313,7 @@ function M.init()
                             return currentIp == data.ip
                         end, 15, 0.5, manualCallback)
                     else
-                        core.runWithSudo(string.format("/usr/sbin/networksetup -setdhcp '%s'", wifiInterface))
+                        core.runWithSudo("/usr/sbin/networksetup -setdhcp " .. core.shellQuote(wifiInterface))
                         core.configureIPv6(wifiInterface, data.v6mode, "", "", "")
                         
                         local dhcpCallback = function(dhcpApplied)
@@ -405,13 +356,25 @@ function M.init()
         M.performNetworkAudit()
     end)
     M.wifiWatcher:start()
-    
+
     local function runInitialAudit(retryCount)
         retryCount = retryCount or 0
         currentSSID = nil
-        local status = core.getCurrentWiFiStatus()
+        local ok, status = pcall(core.getCurrentWiFiStatus)
+        if not ok then
+            utils.log("runInitialAudit - ERROR getting WiFi status: " .. tostring(status))
+            if retryCount < 5 then
+                M._initRetryTimer = hs.timer.new(1, function()
+                    M._initRetryTimer:stop()
+                    M._initRetryTimer = nil
+                    M._runInitialAudit(retryCount + 1)
+                end)
+                M._initRetryTimer:start()
+            end
+            return
+        end
         utils.log("runInitialAudit - attempt " .. retryCount .. ", connected: " .. tostring(status.connected) .. ", ssid: " .. tostring(status.ssid))
-        
+
         if status.connected and status.ssid then
             applyNetworkStrategy(status.ssid)
             currentSSID = status.ssid
@@ -420,16 +383,25 @@ function M.init()
             end)
         elseif retryCount < 5 then
             utils.log("runInitialAudit - retrying in 1 second (attempt " .. retryCount .. ")")
-            hs.timer.doAfter(1, function()
-                runInitialAudit(retryCount + 1)
+            M._initRetryTimer = hs.timer.new(1, function()
+                M._initRetryTimer:stop()
+                M._initRetryTimer = nil
+                M._runInitialAudit(retryCount + 1)
             end)
+            M._initRetryTimer:start()
         else
             utils.log("runInitialAudit - max retries reached, WiFi not connected")
         end
     end
-    
-    hs.timer.doAfter(1, runInitialAudit)
-    
+
+    M._runInitialAudit = runInitialAudit
+
+    utils.log("runInitialAudit - calling directly from init")
+    local ok, err = pcall(M._runInitialAudit, 0)
+    if not ok then
+        utils.log("runInitialAudit - FATAL ERROR: " .. tostring(err))
+    end
+
     utils.log(i18n.t("log_init_success"))
 end
 

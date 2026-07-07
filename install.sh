@@ -55,6 +55,7 @@ hammerspoon-wifi-switcher installer
 Usage:
   bash install.sh              Fresh install (installs Hammerspoon if missing)
   bash install.sh --update     Update code only, preserves your config.json
+  bash install.sh --force      Overwrite existing installation without prompting
   bash install.sh --help       Show this help message
 
 One-liner (curl | bash):
@@ -296,6 +297,10 @@ main() {
                 mode="update"
                 shift
                 ;;
+            --force|-f)
+                mode="force"
+                shift
+                ;;
             --help|-h)
                 show_help
                 exit 0
@@ -321,14 +326,21 @@ main() {
     if [ "$mode" = "update" ]; then
         install_files "true"
     else
-        # Check if already installed
-        if [ -f "$INSTALL_DIR/init.lua" ] && [ -f "$INSTALL_DIR/config.json" ]; then
+        # Check if already installed (skip for --force)
+        if [ "$mode" != "force" ] && [ -f "$INSTALL_DIR/init.lua" ] && [ -f "$INSTALL_DIR/config.json" ]; then
             warn "Existing installation detected at $INSTALL_DIR"
             warn "Use --update to update code without losing config."
             echo ""
-            read -p "Overwrite existing installation? (y/N) " -r
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                info "Aborted. Use --update to safely update."
+            if [ -t 0 ]; then
+                read -p "Overwrite existing installation? (y/N) " -r
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    info "Aborted. Use --update to safely update."
+                    exit 0
+                fi
+            else
+                info "Non-interactive mode (curl|bash). Aborting to protect existing config."
+                info "To update: bash install.sh --update"
+                info "To overwrite: bash install.sh --force"
                 exit 0
             fi
         fi

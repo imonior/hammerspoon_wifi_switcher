@@ -106,6 +106,11 @@ local locales = {
         ui_delete_success = "网络配置已删除",
         ui_delete_confirm = "确定要删除这个网络配置吗？",
         ui_enter_ssid = "请输入网络名称(SSID)",
+        ui_validation_error = "配置校验失败",
+        ui_invalid_ip = "IP地址格式错误",
+        ui_invalid_netmask = "子网掩码格式错误",
+        ui_invalid_gateway = "网关地址格式错误",
+        ui_invalid_dns = "DNS服务器地址格式错误",
         
         system_auto = "系统自动获取",
         v6_off = "Off",
@@ -218,6 +223,11 @@ local locales = {
         ui_delete_success = "Network configuration deleted",
         ui_delete_confirm = "Are you sure you want to delete this network configuration?",
         ui_enter_ssid = "Please enter network name (SSID)",
+        ui_validation_error = "Validation Error",
+        ui_invalid_ip = "Invalid IP address format",
+        ui_invalid_netmask = "Invalid subnet mask format",
+        ui_invalid_gateway = "Invalid gateway address format",
+        ui_invalid_dns = "Invalid DNS server address format",
         
         system_auto = "Auto",
         v6_off = "Off",

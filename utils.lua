@@ -1,10 +1,11 @@
 -- ~/.hammerspoon/wifi_ip_switcher/utils.lua
 local M = {}
-local logFile = os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/switcher.log"
+local modulePath = debug.getinfo(1).source:match("@?(.*/)") or (os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/")
+local logFile = modulePath .. "switcher.log"
 local lastCleanupTime = 0
 local timer = require("hs.timer")
 
-local oldLogPath = os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/wifi_ip_switcher.log"
+local oldLogPath = modulePath .. "wifi_ip_switcher.log"
 
 function M.migrateLog()
     local newFileExists = io.open(logFile, "r")
@@ -77,7 +78,7 @@ end
 
 function M.wait(seconds, callback)
     if not callback then
-        utils.log("WARNING: wait() called without callback - ignoring")
+        M.log("WARNING: wait() called without callback - ignoring")
         return
     end
     timer.doAfter(seconds, callback)
@@ -89,44 +90,51 @@ function M.waitForCondition(checkFn, timeout, interval, callback)
         if callback then callback(false) end
         return
     end
-    
+
     if not callback or type(callback) ~= "function" then
         M.log("waitForCondition - callback 无效")
         return
     end
-    
+
     local elapsed = 0
     local pollInterval = interval or 0.5
     local maxTimeout = timeout or 15
-    local pollTimer = nil
-    
-    local poll = function()
-        if pollTimer then
-            pollTimer:stop()
-            pollTimer = nil
-        end
-        
+    local t = nil
+    local done = false
+
+    local function check()
+        if done then return end
+
         if not checkFn or not callback then
+            done = true
+            if t then t:stop() end
             M.log("waitForCondition - 回调函数已失效")
             return
         end
-        
+
         if checkFn() then
+            done = true
+            if t then t:stop() end
             callback(true)
             return
         end
-        
+
         elapsed = elapsed + pollInterval
         if elapsed >= maxTimeout then
+            done = true
+            if t then t:stop() end
             M.log("waitForCondition - 超时，已等待 " .. elapsed .. " 秒")
             callback(false)
             return
         end
-        
-        pollTimer = timer.doAfter(pollInterval, poll)
     end
-    
-    poll()
+
+    check()
+
+    if not done then
+        t = timer.new(pollInterval, check)
+        t:start()
+    end
 end
 
 function M.executeWithRetry(cmdFn, checkFn, maxRetries, delay, callback)
@@ -135,46 +143,54 @@ function M.executeWithRetry(cmdFn, checkFn, maxRetries, delay, callback)
         if callback then callback(false) end
         return
     end
-    
+
     if not callback or type(callback) ~= "function" then
         M.log("executeWithRetry - callback 无效")
         return
     end
-    
+
     local retries = 0
     local maxAttempts = maxRetries or 3
     local waitDelay = delay or 1
-    local execTimer = nil
-    
-    local execute = function()
-        if execTimer then
-            execTimer:stop()
-            execTimer = nil
-        end
-        
+    local t = nil
+    local done = false
+
+    local function execute()
+        if done then return end
+
         if not cmdFn or not callback then
+            done = true
+            if t then t:stop() end
             M.log("executeWithRetry - 回调函数已失效")
             return
         end
-        
+
         local ok, result = cmdFn()
         if ok and (not checkFn or checkFn()) then
+            done = true
+            if t then t:stop() end
             callback(true, result)
             return
         end
-        
+
         retries = retries + 1
         if retries >= maxAttempts then
+            done = true
+            if t then t:stop() end
             M.log("executeWithRetry - 重试次数用尽，失败")
             callback(false, result)
             return
         end
-        
+
         M.log("executeWithRetry - 第 " .. retries .. " 次重试，等待 " .. waitDelay .. " 秒")
-        execTimer = timer.doAfter(waitDelay, execute)
     end
-    
+
     execute()
+
+    if not done then
+        t = timer.new(waitDelay, execute)
+        t:start()
+    end
 end
 
 return M

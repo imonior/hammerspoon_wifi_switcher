@@ -6,6 +6,12 @@ local i18n = require("wifi_ip_switcher.i18n")
 
 local M = {}
 
+local function shellQuote(s)
+    return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
+end
+
+M.shellQuote = shellQuote
+
 function M.runWithSudo(cmd)
     local fullCmd = string.format("sudo %s", cmd)
     utils.log("驱动层执行: " .. fullCmd)
@@ -54,7 +60,7 @@ end
 function M.getPreferredNetworks()
     local networks = {}
     local dev = M.getWiFiDevice()
-    local handle = io.popen(string.format("/usr/sbin/networksetup -listpreferredwirelessnetworks '%s'", dev))
+    local handle = io.popen("/usr/sbin/networksetup -listpreferredwirelessnetworks " .. shellQuote(dev))
     if handle then
         local result = handle:read("*a")
         handle:close()
@@ -78,7 +84,7 @@ function M.getCurrentWiFiStatus()
         status.ssid = wifiSSID
     else
         local interface = M.getWiFiDevice() or "en0"
-        local cmd = string.format("/usr/sbin/networksetup -getairportnetwork '%s'", interface)
+        local cmd = "/usr/sbin/networksetup -getairportnetwork " .. shellQuote(interface)
         
         local handle = io.popen(cmd)
         if handle then
@@ -126,7 +132,7 @@ function M.getCurrentWiFiStatus()
 end
 
 function M.getCurrentIPv4Info(wifiInterface)
-    local handle = io.popen(string.format("/usr/sbin/networksetup -getinfo '%s'", wifiInterface))
+    local handle = io.popen("/usr/sbin/networksetup -getinfo " .. shellQuote(wifiInterface))
     if not handle then return "", "", "" end
     local result = handle:read("*a")
     handle:close()
@@ -137,7 +143,7 @@ end
 local ipv6LogCount = 0
 
 function M.getCurrentIPv6Info(wifiInterface)
-    local handle = io.popen(string.format("/usr/sbin/networksetup -getinfo '%s'", wifiInterface))
+    local handle = io.popen("/usr/sbin/networksetup -getinfo " .. shellQuote(wifiInterface))
     if not handle then return "Off", i18n.t("unassigned") end
     local result = handle:read("*a")
     handle:close()
@@ -174,7 +180,7 @@ end
 
 function M.getActiveDNS()
     local wifiInterface = M.getWiFiServiceName()
-    local handle = io.popen(string.format("/usr/sbin/networksetup -getdnsservers '%s'", wifiInterface))
+    local handle = io.popen("/usr/sbin/networksetup -getdnsservers " .. shellQuote(wifiInterface))
     if not handle then return i18n.t("system_auto") end
     local result = handle:read("*a")
     handle:close()
@@ -203,20 +209,20 @@ end
 function M.setDNSServers(wifiInterface, dns)
     if dns and dns:match("%S") then
         local dnsList = {}
-        for dnsEntry in string.gmatch(dns, "[^,%s]+") do table.insert(dnsList, "'"..dnsEntry.."'") end
-        return M.runWithSudo(string.format("/usr/sbin/networksetup -setdnsservers '%s' %s", wifiInterface, table.concat(dnsList, " ")))
+        for dnsEntry in string.gmatch(dns, "[^,%s]+") do table.insert(dnsList, shellQuote(dnsEntry)) end
+        return M.runWithSudo("/usr/sbin/networksetup -setdnsservers " .. shellQuote(wifiInterface) .. " " .. table.concat(dnsList, " "))
     else
-        return M.runWithSudo(string.format("/usr/sbin/networksetup -setdnsservers '%s' empty", wifiInterface))
+        return M.runWithSudo("/usr/sbin/networksetup -setdnsservers " .. shellQuote(wifiInterface) .. " empty")
     end
 end
 
 function M.configureIPv6(wifiInterface, v6mode, ipv6, prefix, gateway)
     if v6mode == "manual" and ipv6 and prefix and gateway then
-        M.runWithSudo(string.format("/usr/sbin/networksetup -setv6manual '%s' '%s' '%s' '%s'", wifiInterface, ipv6, prefix, gateway))
+        M.runWithSudo("/usr/sbin/networksetup -setv6manual " .. shellQuote(wifiInterface) .. " " .. shellQuote(ipv6) .. " " .. shellQuote(prefix) .. " " .. shellQuote(gateway))
     elseif v6mode == "automatic" then
-        M.runWithSudo(string.format("/usr/sbin/networksetup -setv6automatic '%s'", wifiInterface))
+        M.runWithSudo("/usr/sbin/networksetup -setv6automatic " .. shellQuote(wifiInterface))
     else
-        M.runWithSudo(string.format("/usr/sbin/networksetup -setv6off '%s'", wifiInterface))
+        M.runWithSudo("/usr/sbin/networksetup -setv6off " .. shellQuote(wifiInterface))
     end
 end
 
