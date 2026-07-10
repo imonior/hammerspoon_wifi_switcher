@@ -4,8 +4,10 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
+#   curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash  # China mirror
 #   bash install.sh              # Fresh install
 #   bash install.sh --update     # Update code only (preserves config.json)
+#   bash install.sh --proxy URL  # Use GitHub proxy
 #   bash install.sh --help       # Show help
 #
 set -e
@@ -16,7 +18,11 @@ set -e
 GITHUB_USER="imonior"
 GITHUB_REPO="hammerspoon-wifi-switcher"
 GITHUB_BRANCH="main"
-TARBALL_URL="https://github.com/${GITHUB_USER}/${GITHUB_REPO}/archive/refs/heads/${GITHUB_BRANCH}.tar.gz"
+
+# GitHub proxy support (for users in China)
+# Usage: GITHUB_PROXY=https://ghfast.top/ bash install.sh
+#   or:  bash install.sh --proxy https://ghfast.top/
+GITHUB_PROXY="${GITHUB_PROXY:-}"
 
 HAMMERSPOON_APP="/Applications/Hammerspoon.app"
 HAMMERSPOON_DIR="$HOME/.hammerspoon"
@@ -41,6 +47,15 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 step()  { echo -e "${BLUE}[STEP]${NC} $1"; }
 
+# Prepend GITHUB_PROXY to any GitHub URL
+github_url() {
+    if [ -n "$GITHUB_PROXY" ]; then
+        echo "${GITHUB_PROXY}${1}"
+    else
+        echo "$1"
+    fi
+}
+
 cleanup() {
     if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then
         rm -rf "$TMP_DIR"
@@ -56,13 +71,23 @@ Usage:
   bash install.sh              Fresh install (installs Hammerspoon if missing)
   bash install.sh --update     Update code only, preserves your config.json
   bash install.sh --force      Overwrite existing installation without prompting
+  bash install.sh --proxy URL  Use GitHub proxy (for faster access in China)
   bash install.sh --help       Show this help message
 
 One-liner (curl | bash):
   curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
 
+  With proxy (for China):
+  curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
+
   With update:
   curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash -s -- --update
+
+  With proxy + update:
+  curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash -s -- --update
+
+Environment variable:
+  GITHUB_PROXY=https://ghfast.top/ bash install.sh
 EOF
 }
 
@@ -97,15 +122,22 @@ ensure_hammerspoon() {
 
         # Fetch latest release URL from GitHub API (fallback to hardcoded version)
         local hammerspoon_url
-        hammerspoon_url=$(curl -fsSL "https://api.github.com/repos/Hammerspoon/hammerspoon/releases/latest" 2>/dev/null \
+        local api_url
+        api_url=$(github_url "https://api.github.com/repos/Hammerspoon/hammerspoon/releases/latest")
+        hammerspoon_url=$(curl -fsSL "$api_url" 2>/dev/null \
             | grep '"browser_download_url"' \
             | grep '\.zip"' \
             | head -1 \
             | sed 's/.*"browser_download_url": *"//;s/"$//')
 
+        # Apply proxy to the download URL if needed
+        if [ -n "$hammerspoon_url" ] && [ -n "$GITHUB_PROXY" ]; then
+            hammerspoon_url="${GITHUB_PROXY}${hammerspoon_url}"
+        fi
+
         if [ -z "$hammerspoon_url" ]; then
             warn "Could not fetch latest release URL. Falling back to known version."
-            hammerspoon_url="$HAMMERSPOON_DMG_URL"
+            hammerspoon_url=$(github_url "$HAMMERSPOON_DMG_URL")
         fi
 
         local tmp_zip="/tmp/hammerspoon.zip"
@@ -158,11 +190,16 @@ ensure_hammerspoon_dir() {
 # ============================================================================
 download_project() {
     TMP_DIR=$(mktemp -d)
+    local tarball_url
+    tarball_url=$(github_url "https://github.com/${GITHUB_USER}/${GITHUB_REPO}/archive/refs/heads/${GITHUB_BRANCH}.tar.gz")
     step "Downloading project from GitHub..."
+    if [ -n "$GITHUB_PROXY" ]; then
+        info "Using proxy: $GITHUB_PROXY"
+    fi
 
-    if ! curl -fsSL "$TARBALL_URL" | tar xz -C "$TMP_DIR" 2>/dev/null; then
+    if ! curl -fsSL "$tarball_url" | tar xz -C "$TMP_DIR" 2>/dev/null; then
         error "Failed to download project files from GitHub."
-        error "URL: $TARBALL_URL"
+        error "URL: $tarball_url"
         exit 1
     fi
 
@@ -308,6 +345,17 @@ main() {
             --force|-f)
                 mode="force"
                 shift
+                ;;
+            --proxy)
+                if [ -n "$2" ]; then
+                    GITHUB_PROXY="$2"
+                    # Ensure trailing slash
+                    [[ "$GITHUB_PROXY" != */ ]] && GITHUB_PROXY="${GITHUB_PROXY}/"
+                    shift 2
+                else
+                    error "--proxy requires a URL argument"
+                    exit 1
+                fi
                 ;;
             --help|-h)
                 show_help

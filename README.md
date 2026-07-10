@@ -25,6 +25,30 @@ Automatically switches network configurations (static IP / DHCP / custom DNS / I
 curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
 ```
 
+### China Mirror (国内加速)
+
+如果直连 GitHub 较慢，可使用代理镜像一键安装：
+
+```bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
+```
+
+更新时同样加上代理前缀：
+
+```bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash -s -- --update
+```
+
+也可以通过环境变量或 `--proxy` 参数指定任意代理：
+
+```bash
+# 环境变量方式
+GITHUB_PROXY=https://ghfast.top/ bash install.sh
+
+# 命令行参数方式
+bash install.sh --proxy https://ghfast.top/
+```
+
 This will:
 1. Install Hammerspoon (via Homebrew or direct download) if not present
 2. Download the project tarball and install to `~/.hammerspoon/wifi_ip_switcher/`
@@ -49,6 +73,12 @@ Updates preserve your `config.json` (backed up to `config.json.backup` during up
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/uninstall.sh | bash
+```
+
+国内镜像：
+
+```bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/uninstall.sh | bash
 ```
 
 Or locally:
