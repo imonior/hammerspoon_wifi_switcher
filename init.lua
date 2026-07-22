@@ -198,6 +198,39 @@ local function setCurrentNetworkToDHCP()
     end)
 end
 
+local function buildNetworkStatusMenuItems()
+    local status = core.getCurrentWiFiStatus()
+    local wifiInterface = core.getWiFiServiceName()
+    local ip, gw, nm = core.getCurrentIPv4Info(wifiInterface)
+    local activeDns = core.getActiveDNS()
+    local vpnInfo = core.getVPNInfo()
+    
+    local items = {}
+    
+    if status.connected and status.ssid then
+        table.insert(items, { title = i18n.t("menu_status_ssid") .. ": " .. status.ssid, disabled = true })
+        table.insert(items, { title = i18n.t("menu_status_ip") .. ": " .. (ip ~= "" and ip or i18n.t("menu_status_disconnected")), disabled = true })
+        if gw and gw ~= "" then
+            table.insert(items, { title = i18n.t("menu_status_gateway") .. ": " .. gw, disabled = true })
+        end
+        table.insert(items, { title = i18n.t("menu_status_dns") .. ": " .. activeDns, disabled = true })
+    else
+        table.insert(items, { title = i18n.t("menu_status_disconnected"), disabled = true })
+    end
+    
+    local hasVPN = false
+    for iface, info in pairs(vpnInfo) do
+        if not hasVPN then
+            table.insert(items, { title = i18n.t("menu_status_vpn"), disabled = true })
+            hasVPN = true
+        end
+        table.insert(items, { title = iface .. ": " .. info.ip, disabled = true })
+    end
+    
+    table.insert(items, { title = "-" })
+    return items
+end
+
 local function buildMenuBar()
     if not M.menuBarItem then
         M.menuBarItem = menubar.new()
@@ -206,7 +239,9 @@ local function buildMenuBar()
     if M.menuBarItem then
         M.menuBarItem:setTitle("🌐")
         
-        local menuItems = {
+        local menuItems = buildNetworkStatusMenuItems()
+        
+        local actions = {
             { title = i18n.t("menu_open_settings"), fn = function()
                 config.read()
                 ui.showEditor(config.current)
@@ -231,6 +266,10 @@ local function buildMenuBar()
                 M.performNetworkAudit()
             end }
         }
+        
+        for _, item in ipairs(actions) do
+            table.insert(menuItems, item)
+        end
         
         M.menuBarItem:setMenu(menuItems)
     end

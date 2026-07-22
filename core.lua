@@ -216,6 +216,33 @@ function M.setDNSServers(wifiInterface, dns)
     end
 end
 
+function M.getVPNInfo()
+    local vpnInfo = {}
+    local handle = io.popen("/sbin/ifconfig 2>/dev/null")
+    if not handle then return vpnInfo end
+    local result = handle:read("*a")
+    handle:close()
+
+    local currentInterface = nil
+    for line in result:gmatch("[^\r\n]+") do
+        local name = line:match("^(%w[%w%d]+):")
+        if name then
+            currentInterface = name
+        elseif currentInterface and not vpnInfo[currentInterface] then
+            local inet = line:match("inet (%d+%.%d+%.%d+%.%d+)")
+            if inet and inet ~= "127.0.0.1" then
+                -- Skip Wi-Fi interface (handled separately)
+                local wifiDevice = M.getWiFiDevice() or "en0"
+                if currentInterface ~= wifiDevice then
+                    local netmask = line:match("netmask (%x+)")
+                    vpnInfo[currentInterface] = { ip = inet, netmask = netmask or "" }
+                end
+            end
+        end
+    end
+    return vpnInfo
+end
+
 function M.configureIPv6(wifiInterface, v6mode, ipv6, prefix, gateway)
     if v6mode == "manual" and ipv6 and prefix and gateway then
         M.runWithSudo("/usr/sbin/networksetup -setv6manual " .. shellQuote(wifiInterface) .. " " .. shellQuote(ipv6) .. " " .. shellQuote(prefix) .. " " .. shellQuote(gateway))

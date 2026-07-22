@@ -66,6 +66,13 @@ local locales = {
         menu_force_detect = "强制重新检测网络",
         menu_no_log = "暂无日志",
         
+        menu_status_ssid = "📶 SSID",
+        menu_status_ip = "IP",
+        menu_status_gateway = "网关",
+        menu_status_dns = "DNS",
+        menu_status_vpn = "VPN/其他接口",
+        menu_status_disconnected = "未连接",
+        
         label_ssid = "📶 SSID",
         label_signal = "📡 信号强度",
         label_config_source = "🔧 配置来源",
@@ -182,6 +189,13 @@ local locales = {
         menu_update_dhcp = "Set Current Network to DHCP",
         menu_force_detect = "Force Network Detection",
         menu_no_log = "No logs available",
+        
+        menu_status_ssid = "📶 SSID",
+        menu_status_ip = "IP",
+        menu_status_gateway = "Gateway",
+        menu_status_dns = "DNS",
+        menu_status_vpn = "VPN/Other Interfaces",
+        menu_status_disconnected = "Not Connected",
         
         label_ssid = "📶 SSID",
         label_signal = "📡 Signal",
