@@ -22,7 +22,7 @@ Automatically switches network configurations (static IP / DHCP / custom DNS / I
 ## Quick Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash
 ```
 
 ### China Mirror (国内加速)
@@ -30,13 +30,13 @@ curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/m
 如果直连 GitHub 较慢，可使用代理镜像一键安装：
 
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash
 ```
 
 更新时同样加上代理前缀：
 
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash -s -- --update
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash -s -- --update
 ```
 
 也可以通过环境变量或 `--proxy` 参数指定任意代理：
@@ -58,13 +58,13 @@ This will:
 ## Update
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash -s -- --update
+curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash -s -- --update
 ```
 
 Or locally:
 
 ```bash
-bash install.sh --update
+bash scripts/install.sh --update
 ```
 
 Updates preserve your `config.json` (backed up to `config.json.backup` during update).
@@ -72,20 +72,20 @@ Updates preserve your `config.json` (backed up to `config.json.backup` during up
 ## Uninstall
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/uninstall.sh | bash
 ```
 
 国内镜像：
 
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/uninstall.sh | bash
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/uninstall.sh | bash
 ```
 
 Or locally:
 
 ```bash
-bash uninstall.sh              # Interactive (prompts for config backup)
-bash uninstall.sh --force      # Skip prompts, auto-backup config to ~/Desktop/
+bash scripts/uninstall.sh              # Interactive (prompts for config backup)
+bash scripts/uninstall.sh --force      # Skip prompts, auto-backup config to ~/Desktop/
 ```
 
 The uninstaller backs up your `config.json` to `~/Desktop/wifi_ip_switcher_config_backup.json` before removing the module. Hammerspoon itself is not removed.
@@ -95,10 +95,11 @@ The uninstaller backs up your `config.json` to `~/Desktop/wifi_ip_switcher_confi
 1. Install [Hammerspoon](https://hammerspoon.org)
 2. Copy project files to `~/.hammerspoon/wifi_ip_switcher/`:
    ```bash
-   mkdir -p ~/.hammerspoon/wifi_ip_switcher/ui/templates
-   cp *.lua ~/.hammerspoon/wifi_ip_switcher/
-   cp ui/*.lua ~/.hammerspoon/wifi_ip_switcher/ui/
-   cp ui/templates/*.html ~/.hammerspoon/wifi_ip_switcher/ui/templates/
+   mkdir -p ~/.hammerspoon/wifi_ip_switcher/ui/templates ~/.hammerspoon/wifi_ip_switcher/ui/icons
+   cp src/*.lua ~/.hammerspoon/wifi_ip_switcher/
+   cp src/ui/*.lua ~/.hammerspoon/wifi_ip_switcher/ui/
+   cp src/ui/templates/*.html ~/.hammerspoon/wifi_ip_switcher/ui/templates/
+   cp src/ui/icons/*.svg ~/.hammerspoon/wifi_ip_switcher/ui/icons/
    cp config.example.json ~/.hammerspoon/wifi_ip_switcher/config.json
    ```
 3. Add to `~/.hammerspoon/init.lua`:
@@ -199,19 +200,23 @@ The module follows a **presentation-core separation** architecture — presentat
 
 ```
 hammerspoon-wifi-switcher/
-├── install.sh                # One-command installer (--update / --force / --help)
-├── uninstall.sh              # Uninstaller (--force)
+├── scripts/                  # Installer scripts
+│   ├── install.sh            # One-command installer (--update / --force / --help)
+│   └── uninstall.sh          # Uninstaller (--force)
 ├── config.example.json       # Example config template
-├── init.lua                  # 模块总指挥官 (Entry): menu bar, WiFi watcher, auto-switch, startup audit
-├── core.lua                  # 核心驱动层 (Core): sudo networksetup, WiFi status, RSSI, DNS, IPv6
-├── config.lua                # 数据持久化层 (Data): config persistence + hs.urlevent handlers + validation
-├── utils.lua                 # 工具函数集 (Utils): logging (7-day rotation), async wait/poll, HTML escape
-├── i18n.lua                  # 国际化 (i18n): zh/en translations, auto-detect via hs.host.locale
-├── ui/                       # 表现层 (Presentation)
-│   ├── web_view.lua          #   WebView controller: window lifecycle, editor + popup management
-│   └── templates/            #   Pure frontend templates
-│       ├── editor.html       #     Configuration editor panel (full UI/interaction/CSS)
-│       └── popups.html       #     Multi-modal popup (reused for log viewer + success notifications)
+├── src/                      # Source code directory
+│   ├── init.lua              # 模块总指挥官 (Entry): menu bar, WiFi watcher, auto-switch, startup audit
+│   ├── core.lua              # 核心驱动层 (Core): sudo networksetup, WiFi status, RSSI, DNS, IPv6
+│   ├── config.lua            # 数据持久化层 (Data): config persistence + hs.urlevent handlers + validation
+│   ├── utils.lua             # 工具函数集 (Utils): logging (7-day rotation), async wait/poll, HTML escape
+│   ├── i18n.lua              # 国际化 (i18n): zh/en translations, auto-detect via hs.host.locale
+│   ├── menu_builder.lua      # 菜单栏构建器 (Menu Builder): menubar construction + dark mode detection
+│   ├── network_apply.lua     # 网络配置应用 (Network Apply): network configuration application logic
+│   └── ui/                   # 表现层 (Presentation)
+│       ├── web_view.lua      #   WebView controller: window lifecycle, editor + popup management
+│       └── templates/        #   Pure frontend templates
+│           ├── editor.html   #     Configuration editor panel (full UI/interaction/CSS)
+│           └── popups.html   #     Multi-modal popup (reused for log viewer + success notifications)
 ```
 
 ### Layer responsibilities

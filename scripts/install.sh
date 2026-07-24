@@ -3,8 +3,8 @@
 # install.sh - One-command installer for hammerspoon-wifi-switcher
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
-#   curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash  # China mirror
+#   curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash
+#   curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash  # China mirror
 #   bash install.sh              # Fresh install
 #   bash install.sh --update     # Update code only (preserves config.json)
 #   bash install.sh --proxy URL  # Use GitHub proxy
@@ -75,16 +75,16 @@ Usage:
   bash install.sh --help       Show this help message
 
 One-liner (curl | bash):
-  curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash
 
   With proxy (for China):
-  curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash
+  curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash
 
   With update:
-  curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash -s -- --update
+  curl -fsSL https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash -s -- --update
 
   With proxy + update:
-  curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/install.sh | bash -s -- --update
+  curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/imonior/hammerspoon-wifi-switcher/main/scripts/install.sh | bash -s -- --update
 
 Environment variable:
   GITHUB_PROXY=https://ghfast.top/ bash install.sh
@@ -228,12 +228,13 @@ install_files() {
     fi
 
     # Create directories
-    mkdir -p "$INSTALL_DIR/ui/templates"
+    mkdir -p "$INSTALL_DIR/ui/templates" "$INSTALL_DIR/ui/icons"
 
     # Copy code files (lua + ui)
-    cp "$SRC_DIR"/*.lua "$INSTALL_DIR/"
-    cp "$SRC_DIR/ui/"*.lua "$INSTALL_DIR/ui/"
-    cp "$SRC_DIR/ui/templates/"* "$INSTALL_DIR/ui/templates/"
+    cp "$SRC_DIR/src/"*.lua "$INSTALL_DIR/"
+    cp "$SRC_DIR/src/ui/"*.lua "$INSTALL_DIR/ui/"
+    cp "$SRC_DIR/src/ui/templates/"* "$INSTALL_DIR/ui/templates/"
+    cp "$SRC_DIR/src/ui/icons/"* "$INSTALL_DIR/ui/icons/"
 
     # Handle config.json
     if [ "$is_update" = "true" ]; then

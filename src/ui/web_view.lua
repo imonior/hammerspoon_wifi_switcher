@@ -4,6 +4,7 @@ local screen = require("hs.screen")
 local urlevent = require("hs.urlevent")
 local json = require("hs.json")
 local drawing = require("hs.drawing")
+local timer = require("hs.timer")
 local core = require("wifi_ip_switcher.core")
 local utils = require("wifi_ip_switcher.utils")
 local config = require("wifi_ip_switcher.config")
@@ -14,18 +15,35 @@ M.editorView = nil
 M.popupView = nil
 M.logPopupView = nil
 
-local modulePath = debug.getinfo(1).source:match("@?(.*/)") or (os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/ui/")
-local basePath = modulePath:match("^(.*)ui/$") or modulePath:match("^(.*)/$") or modulePath
+local modulePath = utils.modulePath .. "ui/"
+local basePath = utils.modulePath
+
+local templateCache = {}
 
 local function loadTemplate(filename)
+    if templateCache[filename] then
+        return templateCache[filename]
+    end
     local path = modulePath .. "templates/" .. filename
     local f = io.open(path, "r")
     if f then
         local content = f:read("*a")
         f:close()
+        templateCache[filename] = content
         return content
     else
         return nil
+    end
+end
+
+-- Pre-load templates at module init time
+loadTemplate("editor.html")
+loadTemplate("popups.html")
+
+function M.closeEditor()
+    if M.editorView then
+        M.editorView:delete()
+        M.editorView = nil
     end
 end
 
@@ -111,7 +129,7 @@ function M.refreshEditor()
     utils.log("refreshEditor - 配置数量: " .. configCount)
     
     local jsExpr = string.format("refreshConfig('%s', '%s')", 
-        networksJson:gsub("'", "\\'"), configJson:gsub("'", "\\'"))
+        utils.escapeJS(networksJson), utils.escapeJS(configJson))
     
     local success, result = pcall(function()
         return M.editorView:evaluateJavaScript(jsExpr)
@@ -148,7 +166,7 @@ function M.syncHardwareStatusToUI()
     
     local ssidStr = status.ssid or i18n.t("not_connected")
     local jsExpr = string.format("updateCurrentNetworkUI('%s', '%s', '%s', '%s', '%s', '%s', '%s')", 
-        ssidStr:gsub("'", "\\'"), ip, nm, gw, dns:gsub("'", "\\'"), v6mode, v6ip:gsub("'", "\\'"))
+        utils.escapeJS(ssidStr), utils.escapeJS(ip), utils.escapeJS(nm), utils.escapeJS(gw), utils.escapeJS(dns), utils.escapeJS(v6mode), utils.escapeJS(v6ip))
         
     local success, result = pcall(function()
         return M.editorView:evaluateJavaScript(jsExpr)
@@ -160,51 +178,60 @@ function M.syncHardwareStatusToUI()
 end
 
 function M.showPopup(mode, title, contentPayload)
+    local function createPopup()
+        local html = loadTemplate("popups.html")
+        if not html then return end
+
+        html = html:gsub("%%POPUP_MODE%%", function() return mode end)
+        html = html:gsub("%%POPUP_TITLE%%", function() return title end)
+        
+        local escapedContent = utils.escapeHTML(contentPayload or "")
+        html = html:gsub("%%POPUP_CONTENT%%", function() return escapedContent end)
+        html = html:gsub("%%POPUP_TIME%%", function() return os.date("%Y-%m-%d %H:%M:%S") end)
+        html = html:gsub("%%LOCALE_PLACEHOLDER%%", function() return i18n.getLocale() end)
+
+        local mainScreen = screen.mainScreen():frame()
+        local w, h = (mode == "log") and 600 or 340, (mode == "log") and 400 or 440
+
+        local popup = webview.new({
+            x = mainScreen.x + (mainScreen.w - w) / 2,
+            y = mainScreen.y + (mainScreen.h - h) / 2,
+            w = w, h = h
+        }):html(html):windowTitle(title)
+        
+        if mode == "success" then
+            popup:level(drawing.windowLevels.mainMenu + 1)
+            M.popupView = popup
+        else
+            popup:level(drawing.windowLevels.floating)
+            M.logPopupView = popup
+        end
+
+        if popup.windowStyle then popup:windowStyle({"titled", "closable", "resizable"}) end
+        popup:show()
+        
+        utils.log("showPopup - 已显示新弹窗: " .. title)
+    end
+
     if mode == "success" then
         if M.popupView and type(M.popupView) == "userdata" then
             local ok, err = pcall(function() M.popupView:delete() end)
             M.popupView = nil
             utils.log("showPopup - 已关闭旧的成功弹窗")
+            timer.doAfter(0.1, createPopup)
+            return
         end
     else
         if M.logPopupView and type(M.logPopupView) == "userdata" then
             local ok, err = pcall(function() M.logPopupView:delete() end)
             M.logPopupView = nil
+            utils.log("showPopup - 已关闭旧的日志弹窗")
+            timer.doAfter(0.1, createPopup)
+            return
         end
     end
     
-    local html = loadTemplate("popups.html")
-    if not html then return end
-
-    html = html:gsub("%%POPUP_MODE%%", function() return mode end)
-    html = html:gsub("%%POPUP_TITLE%%", function() return title end)
-    
-    local escapedContent = utils.escapeHTML(contentPayload or "")
-    html = html:gsub("%%POPUP_CONTENT%%", function() return escapedContent end)
-    html = html:gsub("%%POPUP_TIME%%", function() return os.date("%Y-%m-%d %H:%M:%S") end)
-    html = html:gsub("%%LOCALE_PLACEHOLDER%%", function() return i18n.getLocale() end)
-
-    local mainScreen = screen.mainScreen():frame()
-    local w, h = (mode == "log") and 700 or 360, (mode == "log") and 500 or 420
-
-    local popup = webview.new({
-        x = mainScreen.x + (mainScreen.w - w) / 2,
-        y = mainScreen.y + (mainScreen.h - h) / 2,
-        w = w, h = h
-    }):html(html):windowTitle(title)
-    
-    if mode == "success" then
-        popup:level(drawing.windowLevels.mainMenu + 1)
-        M.popupView = popup
-    else
-        popup:level(drawing.windowLevels.floating)
-        M.logPopupView = popup
-    end
-
-    if popup.windowStyle then popup:windowStyle({"titled", "closable", "resizable"}) end
-    popup:show()
-    
-    utils.log("showPopup - 已显示新弹窗: " .. title)
+    createPopup()
 end
 
 urlevent.bind("close_popup_view", function() 
@@ -219,8 +246,7 @@ urlevent.bind("close_popup_view", function()
 end)
 
 urlevent.bind("clear_log", function()
-    local logFile = basePath .. "switcher.log"
-    local f = io.open(logFile, "w")
+    local f = io.open(basePath .. "switcher.log", "w")
     if f then
         f:close()
         utils.log(i18n.t("log_cleared"))
@@ -239,8 +265,7 @@ urlevent.bind("clear_log", function()
 end)
 
 urlevent.bind("refresh_log", function()
-    local logFile = basePath .. "switcher.log"
-    local f = io.open(logFile, "r")
+    local f = io.open(basePath .. "switcher.log", "r")
     local content = ""
     if f then
         content = f:read("*a")

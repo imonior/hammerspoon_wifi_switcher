@@ -6,7 +6,7 @@ local utils = require("wifi_ip_switcher.utils")
 local i18n = require("wifi_ip_switcher.i18n")
 
 local M = {}
-local modulePath = debug.getinfo(1).source:match("@?(.*/)") or (os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/")
+local modulePath = utils.modulePath
 M.path = modulePath .. "config.json"
 M.current = {}
 
@@ -89,7 +89,8 @@ function M.registerURLSchemes(onConfigChangedCallback, onForceApply, onFetchInfo
     urlevent.bind("save_wifi_scene", function(_, params)
         local d = nil
         if params.data then
-            d = json.decode(params.data)
+            local ok, decoded = pcall(json.decode, params.data)
+            d = ok and decoded
         elseif params.ssid then
             d = params
         end
@@ -117,8 +118,8 @@ function M.registerURLSchemes(onConfigChangedCallback, onForceApply, onFetchInfo
         
         local ssid = nil
         if params.data then
-            local d = json.decode(params.data)
-            ssid = d and d.ssid
+            local ok, d = pcall(json.decode, params.data)
+            ssid = ok and d and d.ssid
         else
             ssid = params.ssid
         end
@@ -139,26 +140,21 @@ function M.registerURLSchemes(onConfigChangedCallback, onForceApply, onFetchInfo
         end
     end)
 
-    urlevent.bind("force_apply_network", function(eventName, params)
-        if onForceApply then 
-            local data = nil
-            if params.data then
-                local decoded = params.data:gsub('%%(%x%x)', function(h) return string.char(tonumber(h, 16)) end)
-                data = json.decode(decoded)
-            end
-            onForceApply(data) 
+    local function handleForceApply(params)
+        local data = nil
+        if params.data then
+            local decoded = params.data:gsub('%%(%x%x)', function(h) return string.char(tonumber(h, 16)) end)
+            data = json.decode(decoded)
         end
+        return data
+    end
+
+    urlevent.bind("force_apply_network", function(eventName, params)
+        if onForceApply then onForceApply(handleForceApply(params)) end
     end)
     
     urlevent.bind("force_apply_network_with_confirm", function(eventName, params)
-        if onForceApply then 
-            local data = nil
-            if params.data then
-                local decoded = params.data:gsub('%%(%x%x)', function(h) return string.char(tonumber(h, 16)) end)
-                data = json.decode(decoded)
-            end
-            onForceApply(data) 
-        end
+        if onForceApply then onForceApply(handleForceApply(params)) end
     end)
 
     urlevent.bind("get_current_network_info", function()

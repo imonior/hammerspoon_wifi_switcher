@@ -1,6 +1,7 @@
 -- ~/.hammerspoon/wifi_ip_switcher/utils.lua
 local M = {}
-local modulePath = debug.getinfo(1).source:match("@?(.*/)") or (os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/")
+M.modulePath = debug.getinfo(1).source:match("@?(.*/)") or (os.getenv("HOME") .. "/.hammerspoon/wifi_ip_switcher/")
+local modulePath = M.modulePath
 local logFile = modulePath .. "switcher.log"
 local lastCleanupTime = 0
 local timer = require("hs.timer")
@@ -34,11 +35,19 @@ function M.escapeHTML(str)
     return str
 end
 
+function M.escapeJS(str)
+    if not str then return "" end
+    str = tostring(str)
+    str = str:gsub("\\", "\\\\"):gsub("'", "\\'"):gsub('"', '\\"'):gsub("\n", "\\n"):gsub("\r", "\\r"):gsub("\t", "\\t")
+    return str
+end
+
 function M.cleanOldLogs()
     local f = io.open(logFile, "r")
     if not f then return end
     local now = os.time()
     local lines = {}
+    local lastEntryWithinRange = false
     for line in f:lines() do
         local dateStr = line:match("%[(%d+%-%d+%-%d+ %d+:%d+:%d+)%]")
         if dateStr then
@@ -46,12 +55,20 @@ function M.cleanOldLogs()
             local y, m, d, h, mi, s = tonumber(year), tonumber(month), tonumber(day), tonumber(hour), tonumber(min), tonumber(sec)
             if y and m and d and h and mi and s then
                 local t = os.time{year=y, month=m, day=d, hour=h, min=mi, sec=s}
-                if now - t <= 7*24*3600 then table.insert(lines, line) end
+                if now - t <= 7*24*3600 then
+                    table.insert(lines, line)
+                    lastEntryWithinRange = true
+                else
+                    lastEntryWithinRange = false
+                end
             else
                 table.insert(lines, line)
+                lastEntryWithinRange = true
             end
         else
-            table.insert(lines, line)
+            if lastEntryWithinRange then
+                table.insert(lines, line)
+            end
         end
     end
     f:close()
