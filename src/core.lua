@@ -165,18 +165,11 @@ function M.getCurrentIPv4Info(wifiInterface)
 end
 
 -- 【新增】解析 IPv6 生效状态与实际分配到的全球单播地址
-local ipv6LogCount = 0
-
 function M.getCurrentIPv6Info(wifiInterface)
     local handle = io.popen("/usr/sbin/networksetup -getinfo " .. shellQuote(wifiInterface))
     if not handle then return "Off", i18n.t("unassigned"), "", "" end
     local result = handle:read("*a")
     handle:close()
-
-    ipv6LogCount = ipv6LogCount + 1
-    if ipv6LogCount % 10 == 0 then
-        utils.log("getCurrentIPv6Info - raw output: " .. tostring(result))
-    end
 
     local v6mode = "Off"
     if result:match("IPv6:.*Automatic") then v6mode = i18n.t("v6_automatic")
