@@ -121,6 +121,8 @@ local locales = {
         ui_invalid_dns = "DNS服务器地址格式错误",
         
         system_auto = "系统自动获取",
+        v4_dhcp = "DHCP",
+        v4_manual = "Static",
         v6_off = "Off",
         v6_automatic = "Automatic",
         v6_manual = "Manual",
@@ -246,6 +248,8 @@ local locales = {
         ui_invalid_dns = "Invalid DNS server address format",
         
         system_auto = "Auto",
+        v4_dhcp = "DHCP",
+        v4_manual = "Static",
         v6_off = "Off",
         v6_automatic = "Automatic",
         v6_manual = "Manual",

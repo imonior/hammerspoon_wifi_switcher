@@ -33,8 +33,8 @@ local function updateNetworkStatusCache()
     cachedNetworkStatus.wifiStatus = core.getCurrentWiFiStatus()
     cachedNetworkStatus.wifiInterface = core.getWiFiServiceName()
     
-    local ip, gw, nm = core.getCurrentIPv4Info(cachedNetworkStatus.wifiInterface)
-    cachedNetworkStatus.ipv4 = { ip = ip, gw = gw, nm = nm }
+    local ip, gw, nm, v4mode = core.getCurrentIPv4Info(cachedNetworkStatus.wifiInterface)
+    cachedNetworkStatus.ipv4 = { ip = ip, gw = gw, nm = nm, mode = v4mode }
     
     local v6mode, v6ip, v6prefix, v6gw = core.getCurrentIPv6Info(cachedNetworkStatus.wifiInterface)
     cachedNetworkStatus.ipv6 = { mode = v6mode, ip = v6ip, prefix = v6prefix, gw = v6gw }

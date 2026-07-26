@@ -155,7 +155,7 @@ function M.syncHardwareStatusToUI()
     
     local status = core.getCurrentWiFiStatus()
     local wifiInterface = core.getWiFiServiceName()
-    local ip, gw, nm = core.getCurrentIPv4Info(wifiInterface)
+    local ip, gw, nm, v4mode = core.getCurrentIPv4Info(wifiInterface)
     local dns = core.getActiveDNS()
     local v6mode, v6ip = core.getCurrentIPv6Info(wifiInterface)
     
@@ -165,8 +165,8 @@ function M.syncHardwareStatusToUI()
     end
     
     local ssidStr = status.ssid or i18n.t("not_connected")
-    local jsExpr = string.format("updateCurrentNetworkUI('%s', '%s', '%s', '%s', '%s', '%s', '%s')", 
-        utils.escapeJS(ssidStr), utils.escapeJS(ip), utils.escapeJS(nm), utils.escapeJS(gw), utils.escapeJS(dns), utils.escapeJS(v6mode), utils.escapeJS(v6ip))
+    local jsExpr = string.format("updateCurrentNetworkUI('%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')", 
+        utils.escapeJS(ssidStr), utils.escapeJS(v4mode), utils.escapeJS(ip), utils.escapeJS(nm), utils.escapeJS(gw), utils.escapeJS(dns), utils.escapeJS(v6mode), utils.escapeJS(v6ip))
         
     local success, result = pcall(function()
         return M.editorView:evaluateJavaScript(jsExpr)

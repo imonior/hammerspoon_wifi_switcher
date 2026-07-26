@@ -13,7 +13,7 @@ function M.buildNetworkReport(configSource)
     local rssi = status.rssi or i18n.t("unknown")
     local wifiInterface = core.getWiFiServiceName()
     local wifiDevice = core.getWiFiDevice()
-    local ip, gw, nm = core.getCurrentIPv4Info(wifiInterface)
+    local ip, gw, nm, v4mode = core.getCurrentIPv4Info(wifiInterface)
     local activeDns = core.getActiveDNS()
     local v6mode, v6ip = core.getCurrentIPv6Info(wifiInterface)
 
@@ -24,6 +24,7 @@ function M.buildNetworkReport(configSource)
     report = report ..
         i18n.t("label_config_source") .. ": " .. configSource .. "\n\n" ..
         i18n.t("label_ipv4") .. "\n" ..
+        i18n.t("label_mode") .. ": " .. v4mode .. "\n" ..
         i18n.t("label_address") .. ": " .. ip .. "\n" ..
         i18n.t("label_netmask") .. ": " .. nm .. "\n" ..
         i18n.t("label_gateway") .. ": " .. gw .. "\n\n" ..

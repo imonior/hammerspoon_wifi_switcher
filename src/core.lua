@@ -158,10 +158,14 @@ end
 
 function M.getCurrentIPv4Info(wifiInterface)
     local handle = io.popen("/usr/sbin/networksetup -getinfo " .. shellQuote(wifiInterface))
-    if not handle then return "", "", "" end
+    if not handle then return "", "", "", "" end
     local result = handle:read("*a")
     handle:close()
-    return result:match("IP address:%s*([%d%.]+)") or "", result:match("Router:%s*([%d%.]+)") or "", result:match("Subnet mask:%s*([%d%.]+)") or ""
+
+    local v4mode = i18n.t("v4_dhcp")
+    if result:match("Manual Configuration") then v4mode = i18n.t("v4_manual") end
+
+    return result:match("IP address:%s*([%d%.]+)") or "", result:match("Router:%s*([%d%.]+)") or "", result:match("Subnet mask:%s*([%d%.]+)") or "", v4mode
 end
 
 -- 【新增】解析 IPv6 生效状态与实际分配到的全球单播地址
@@ -295,7 +299,15 @@ local function getInterfaceDetails(wifiDevice)
     return ifaceDetails
 end
 
-local function getSystemVPNs(ifaceDetails)
+local function getRunningProcesses()
+    local handle = io.popen("/bin/ps -axo comm= 2>/dev/null")
+    if not handle then return "" end
+    local result = handle:read("*a")
+    handle:close()
+    return result
+end
+
+local function getSystemVPNs(ifaceDetails, processList)
     local scutilVPNs = {}
     local handle = io.popen("/usr/sbin/scutil --nc list 2>/dev/null")
     if handle then
@@ -303,7 +315,7 @@ local function getSystemVPNs(ifaceDetails)
         handle:close()
 
         for line in result:gmatch("[^\r\n]+") do
-            local serviceName, serviceType = line:match("%*?%s*%([^)]*%)%s+\"(.+)\"%s+%[(.+)%]")
+            local serviceName, serviceType = line:match('%*?%s*%([^)]*%).-"(.+)"%s+%[(.-)%]')
             if serviceName then
                 local sh = io.popen("/usr/sbin/scutil --nc status " .. shellQuote(serviceName) .. " 2>/dev/null")
                 local status = "Disconnected"
@@ -311,10 +323,19 @@ local function getSystemVPNs(ifaceDetails)
                 if sh then
                     local statusResult = sh:read("*a")
                     sh:close()
-                    if statusResult:match("Disconnected") then status = "Disconnected"
-                    elseif statusResult:match("Connected") then status = "Connected"
+                    local firstLine = statusResult:match("^[^\n]+")
+                    if firstLine then
+                        firstLine = firstLine:gsub("^%s+", ""):gsub("%s+$", "")
+                        if firstLine == "Connected" then
+                            status = "Connected"
+                        elseif firstLine == "Disconnected" then
+                            status = "Disconnected"
+                        end
                     end
                     iface = statusResult:match("interface%s*:%s*(%w+)")
+                    if not iface then
+                        iface = statusResult:match("InterfaceName%s*:%s*(%w+)")
+                    end
                 end
 
                 local details = nil
@@ -323,13 +344,24 @@ local function getSystemVPNs(ifaceDetails)
                     ifaceDetails[iface] = nil
                 end
 
+                local displayName = serviceName
+                local vpnSource = "macOS VPN"
+
+                if serviceName:lower():match("hiddify") or (serviceType and serviceType:lower():match("hiddify")) then
+                    displayName = "Hiddify"
+                    vpnSource = "Hiddify"
+                elseif serviceName:lower():match("protonvpn") or serviceName:lower():match("proton vpn") then
+                    displayName = "ProtonVPN"
+                    vpnSource = "ProtonVPN"
+                end
+
                 table.insert(scutilVPNs, {
-                    name = serviceName,
+                    name = displayName,
                     type = serviceType,
                     status = status,
                     interface = iface,
                     details = details,
-                    source = "macOS VPN"
+                    source = vpnSource
                 })
             end
         end
@@ -378,22 +410,159 @@ local function getWireGuardInterfaceMap()
         end
     end
 
-    if not mapped and #wgConfigNames == #wgIfaces then
-        for i, configName in ipairs(wgConfigNames) do
-            wgInterfaceMap[wgIfaces[i]] = configName
+    if not mapped and #wgConfigNames > 0 and #wgIfaces > 0 then
+        if #wgConfigNames == #wgIfaces then
+            table.sort(wgConfigNames)
+            table.sort(wgIfaces)
+            for i, configName in ipairs(wgConfigNames) do
+                wgInterfaceMap[wgIfaces[i]] = configName
+            end
+            mapped = true
+        elseif #wgConfigNames == 1 and #wgIfaces == 1 then
+            wgInterfaceMap[wgIfaces[1]] = wgConfigNames[1]
+            mapped = true
+        end
+    end
+
+    if not mapped and #wgIfaces > 0 then
+        for _, iface in ipairs(wgIfaces) do
+            if not wgInterfaceMap[iface] then
+                wgInterfaceMap[iface] = "WireGuard"
+            end
         end
     end
 
     return wgInterfaceMap
 end
 
-local function getRemainingTunnelInterfaces(ifaceDetails, wgInterfaceMap)
+local function getListeningProcessMap()
+    local handle = io.popen("lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null")
+    if not handle then return {} end
+    local result = handle:read("*a")
+    handle:close()
+
+    local map = {}
+    for line in result:gmatch("[^\r\n]+") do
+        local process = line:match("^(%S+)")
+        local port = line:match("%*:(%d+)") or line:match(":(%d+)%s")
+        if process and port then
+            if not map[port] then
+                map[port] = process
+            end
+        end
+    end
+    return map
+end
+
+local function determineClashAppName(processList, listeningMap, apiPort)
+    local listener = listeningMap[apiPort]
+    if listener then
+        if listener == "FlClash" or listener == "FlClashCore" then return "FlClash" end
+        if listener:lower():match("karing") then return "Karing" end
+        if listener:lower():match("sing") then return "sing-box" end
+        if listener:lower():match("mihomo") then return "FlClash" end
+    end
+
+    if processList then
+        if processList:match("FlClash") then return "FlClash" end
+        if processList:match("[Kk]aring") then return "Karing" end
+        if processList:match("sing-box") then return "sing-box" end
+    end
+
+    return "Clash"
+end
+
+local function getClashAppInfos(processList, listeningMap)
+    local ports = { "9090", "9097", "7892", "11227" }
+    local infos = {}
+    local seenPorts = {}
+
+    for _, port in ipairs(ports) do
+        if not seenPorts[port] then
+            local handle = io.popen("curl -s --connect-timeout 1 http://127.0.0.1:" .. port .. "/configs 2>/dev/null")
+            if handle then
+                local result = handle:read("*a")
+                handle:close()
+
+                if result and result:match("tun") then
+                    seenPorts[port] = true
+                    local tunEnable = result:match('"tun"%s*:%s*{[^}]*"enable"%s*:%s*(true)')
+                    local tunDevice = result:match('"device"%s*:%s*"([^"]+)"')
+                    local mode = result:match('"mode"%s*:%s*"(%w+)"')
+                    local mixedPort = result:match('"mixed-port"%s*:%s*(%d+)')
+                    local socksPort = result:match('"socks-port"%s*:%s*(%d+)')
+                    local httpPort = result:match('"port"%s*:%s*(%d+)')
+
+                    local appName = determineClashAppName(processList, listeningMap, port)
+                    local tunEnabled = tunEnable == "true"
+
+                    local hasConnections = true
+                    if not tunEnabled then
+                        hasConnections = false
+                        local connHandle = io.popen("curl -s --connect-timeout 1 http://127.0.0.1:" .. port .. "/connections 2>/dev/null")
+                        if connHandle then
+                            local connResult = connHandle:read("*a")
+                            connHandle:close()
+                            if connResult and connResult:match('"chains"') then
+                                for chains in connResult:gmatch('"chains"%s*:%s*%[([^%]]*)%]') do
+                                    if not chains:match("DIRECT") and not chains:match("COMPATIBLE") and not chains:match("REJECT") then
+                                        hasConnections = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                    end
+
+                    table.insert(infos, {
+                        appName = appName,
+                        device = tunDevice,
+                        tunEnabled = tunEnabled,
+                        mode = mode,
+                        mixedPort = mixedPort,
+                        socksPort = socksPort,
+                        httpPort = httpPort,
+                        apiPort = port,
+                        hasConnections = hasConnections
+                    })
+                end
+            end
+        end
+    end
+
+    return infos
+end
+
+local function identifyTunnelApp(iface, clashAppInfos)
+    for _, info in ipairs(clashAppInfos or {}) do
+        if info.tunEnabled and info.device == iface then
+            return { name = info.appName, source = info.mode or "TUN" }
+        end
+    end
+    return nil
+end
+
+local function getRemainingTunnelInterfaces(ifaceDetails, wgInterfaceMap, processList, clashAppInfos)
     local otherIfaces = {}
     for iface, det in pairs(ifaceDetails) do
         if iface:match("^utun") or iface:match("^tun") or iface:match("^tap") or iface:match("^ipsec") or iface:match("^ppp") then
             if det.hasIPv4 or det.hasIPv6 then
-                local displayName = wgInterfaceMap[iface] or iface
-                local source = wgInterfaceMap[iface] and "WireGuard" or "Tunnel"
+                local displayName = wgInterfaceMap[iface]
+                local source = wgInterfaceMap[iface] and "WireGuard" or nil
+
+                if not displayName then
+                    local appInfo = identifyTunnelApp(iface, clashAppInfos)
+                    if appInfo then
+                        displayName = appInfo.name
+                        source = appInfo.source
+                    end
+                end
+
+                if not displayName then
+                    displayName = iface
+                    source = "Tunnel"
+                end
+
                 table.insert(otherIfaces, {
                     name = displayName,
                     type = "Interface",
@@ -408,17 +577,148 @@ local function getRemainingTunnelInterfaces(ifaceDetails, wgInterfaceMap)
     return otherIfaces
 end
 
+local knownProxyApps = {
+    { process = "Hiddify", name = "Hiddify" },
+    { process = "FlClash", name = "FlClash" },
+    { process = "FlClashCore", name = "FlClash" },
+    { process = "sing-box", name = "sing-box" },
+    { process = "Karing", name = "Karing" },
+    { process = "karing", name = "Karing" },
+    { process = "mihomo", name = "FlClash" },
+}
+
+local function getHiddifyConnectionStatus()
+    local logPath = os.getenv("HOME") .. "/Library/Application Support/app.hiddify.com/app.log"
+    local handle = io.popen("tail -30 '" .. logPath .. "' 2>/dev/null")
+    if not handle then return nil end
+    local result = handle:read("*a")
+    handle:close()
+
+    local lastStatus = nil
+    for line in result:gmatch("[^\r\n]+") do
+        local status = line:match("connection status: (%w+)")
+        if status then
+            lastStatus = status
+        end
+    end
+    return lastStatus
+end
+
+local function getProxyVPNs(processList, existingVPNs, clashAppInfos, listeningMap)
+    local proxyVPNs = {}
+    local wifiService = M.getWiFiServiceName()
+
+    local detectedApps = {}
+    for _, v in ipairs(existingVPNs) do
+        detectedApps[v.name] = true
+    end
+
+    if not detectedApps["Hiddify"] and processList and processList:match("Hiddify") then
+        local hiddifyStatus = getHiddifyConnectionStatus()
+        if hiddifyStatus == "CONNECTED" then
+            table.insert(proxyVPNs, {
+                name = "Hiddify",
+                type = "Proxy",
+                status = "Connected",
+                interface = nil,
+                details = nil,
+                source = "Proxy"
+            })
+            detectedApps["Hiddify"] = true
+        end
+    end
+
+    for _, info in ipairs(clashAppInfos or {}) do
+        if not info.tunEnabled and not detectedApps[info.appName] and info.hasConnections then
+            table.insert(proxyVPNs, {
+                name = info.appName,
+                type = "Proxy",
+                status = "Connected",
+                interface = nil,
+                details = nil,
+                source = "Proxy"
+            })
+            detectedApps[info.appName] = true
+        end
+    end
+
+    local proxyPort = nil
+    local proxyTypes = { "getwebproxy", "getsecurewebproxy", "getsocksfirewallproxy" }
+    for _, cmd in ipairs(proxyTypes) do
+        local h = io.popen("/usr/sbin/networksetup -" .. cmd .. " " .. shellQuote(wifiService) .. " 2>/dev/null")
+        if h then
+            local result = h:read("*a")
+            h:close()
+            if result:match("Enabled: Yes") then
+                local port = result:match("Port:%s*(%d+)")
+                if port and port ~= "0" then
+                    proxyPort = port
+                    break
+                end
+            end
+        end
+    end
+
+    if not proxyPort then return proxyVPNs end
+
+    local listenerProcess = listeningMap[proxyPort]
+    if listenerProcess then
+        for _, app in ipairs(knownProxyApps) do
+            if listenerProcess == app.process and not detectedApps[app.name] then
+                table.insert(proxyVPNs, {
+                    name = app.name,
+                    type = "Proxy",
+                    status = "Connected",
+                    interface = nil,
+                    details = nil,
+                    source = "Proxy"
+                })
+                detectedApps[app.name] = true
+                break
+            end
+        end
+    end
+
+    for _, info in ipairs(clashAppInfos or {}) do
+        if not info.tunEnabled and not detectedApps[info.appName] and info.hasConnections then
+            local proxyPorts = { info.mixedPort, info.socksPort, info.httpPort }
+            for _, p in ipairs(proxyPorts) do
+                if p and tostring(p) == proxyPort then
+                    table.insert(proxyVPNs, {
+                        name = info.appName,
+                        type = "Proxy",
+                        status = "Connected",
+                        interface = nil,
+                        details = nil,
+                        source = "Proxy"
+                    })
+                    detectedApps[info.appName] = true
+                    break
+                end
+            end
+        end
+    end
+
+    return proxyVPNs
+end
+
 function M.getVPNInfo()
     local vpnInfo = {}
     local wifiDevice = M.getWiFiDevice() or "en0"
 
+    local processList = getRunningProcesses()
+    local listeningMap = getListeningProcessMap()
     local ifaceDetails = getInterfaceDetails(wifiDevice)
-    local scutilVPNs = getSystemVPNs(ifaceDetails)
+    local scutilVPNs = getSystemVPNs(ifaceDetails, processList)
     local wgInterfaceMap = getWireGuardInterfaceMap()
-    local otherIfaces = getRemainingTunnelInterfaces(ifaceDetails, wgInterfaceMap)
+    local clashAppInfos = getClashAppInfos(processList, listeningMap)
+    local otherIfaces = getRemainingTunnelInterfaces(ifaceDetails, wgInterfaceMap, processList, clashAppInfos)
 
     for _, v in ipairs(scutilVPNs) do table.insert(vpnInfo, v) end
     for _, v in ipairs(otherIfaces) do table.insert(vpnInfo, v) end
+
+    local proxyVPNs = getProxyVPNs(processList, vpnInfo, clashAppInfos, listeningMap)
+    for _, v in ipairs(proxyVPNs) do table.insert(vpnInfo, v) end
 
     return vpnInfo
 end

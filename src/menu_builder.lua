@@ -31,6 +31,7 @@ function M.buildNetworkStatusMenuItems(cache)
     local items = {}
     local status = cache.wifiStatus or {}
     local ip, gw, nm = cache.ipv4.ip, cache.ipv4.gw, cache.ipv4.nm
+    local v4mode = cache.ipv4.mode
     local v6mode, v6ip, v6prefix, v6gw = cache.ipv6.mode, cache.ipv6.ip, cache.ipv6.prefix, cache.ipv6.gw
     local activeDns = cache.dns
     local vpnInfo = cache.vpnInfo or {}
@@ -55,11 +56,12 @@ function M.buildNetworkStatusMenuItems(cache)
     
     if status.connected and status.ssid then
         table.insert(items, { 
-            title = styledtext.new("  SSID: " .. status.ssid, { color = { hex = isDarkMode and "#FFFFFF" or "#000000" }, font = { size = 12 } }),
+            title = styledtext.new("  SSID:", { color = { hex = isDarkMode and "#90CAF9" or "#1565C0" } })
+                .. styledtext.new(" " .. status.ssid, { color = { hex = isDarkMode and "#E0E0E0" or "#333333" }, font = { size = 12 } }),
             disabled = true
         })
         table.insert(items, { 
-            title = styledtext.new("  IPv4:", { color = { hex = isDarkMode and "#90CAF9" or "#1565C0" } }),
+            title = styledtext.new("  IPv4: " .. v4mode, { color = { hex = isDarkMode and "#90CAF9" or "#1565C0" } }),
             disabled = true
         })
         if ip and ip ~= "" then
@@ -103,7 +105,8 @@ function M.buildNetworkStatusMenuItems(cache)
             end
         end
         table.insert(items, { 
-            title = styledtext.new("  DNS: " .. activeDns, { color = { hex = isDarkMode and "#E0E0E0" or "#333333" }, font = { size = 12 } }),
+            title = styledtext.new("  DNS:", { color = { hex = isDarkMode and "#90CAF9" or "#1565C0" } })
+                .. styledtext.new(" " .. activeDns, { color = { hex = isDarkMode and "#E0E0E0" or "#333333" }, font = { size = 12 } }),
             disabled = true
         })
     end
